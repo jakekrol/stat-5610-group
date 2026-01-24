@@ -446,24 +446,24 @@ predicted.ys <- knn(train = training[,1:2], test = testing[,1:2], cl=training[,3
 
 Given the training set (seed=116) and the testing set (seed=121), fit KNN on two different values of k.
 
-    ```{r}
+```{r}
 
-    testing.grid <- expand.grid(X1 = seq(0, 1, by = .01), 
-                                X2 = seq(0, 1, by = .01))
+testing.grid <- expand.grid(X1 = seq(0, 1, by = .01), 
+                            X2 = seq(0, 1, by = .01))
 
-    predicted.grid1 <- knn(train = training[,1:2], 
-                          test = testing.grid, 
-                          cl = training[,3], 
-                          k = 1)
-    predicted.grid5 <- knn(train = training[,1:2], 
-                          test = testing.grid, 
-                          cl = training[,3], 
-                          k = 5)
+predicted.grid1 <- knn(train = training[,1:2], 
+                      test = testing.grid, 
+                      cl = training[,3], 
+                      k = 1)
+predicted.grid5 <- knn(train = training[,1:2], 
+                      test = testing.grid, 
+                      cl = training[,3], 
+                      k = 5)
 
-    predicted.gridxy <- testing.grid
-    predicted.gridxy$Y1 <- as.numeric(predicted.grid1) -1
-    predicted.gridxy$Y5 <- as.numeric(predicted.grid5) -1 
-    ```
+predicted.gridxy <- testing.grid
+predicted.gridxy$Y1 <- as.numeric(predicted.grid1) -1
+predicted.gridxy$Y5 <- as.numeric(predicted.grid5) -1 
+```
 
 Calculate the misclassification rate for each k. If you don't know how to do this, ask a teammate or the professor.
 
@@ -491,39 +491,39 @@ mis_k5
 
 If possible, plot the decision boundaries for your k values.
 
-    ```{r}
-    ggplot() +
-      # Background: Show the decision regions
-      geom_raster(data = predicted.gridxy, aes(x = X1, y = X2, fill = as.factor(Y1)), alpha = 0.3) +
-      # The Boundary: The contour line where Y changes
-      geom_contour(data = predicted.gridxy, aes(x = X1, y = X2, z = Y1), 
-                   breaks = 1.5, color = "black", size = 1) +
-      # The actual data points
-      geom_point(data = training, aes(x = X1, y = X2, color = as.factor(Y))) +
-      scale_fill_manual(values = c("red", "blue"), name = "Region") +
-      scale_color_manual(values = c("red", "blue"), name = "Actual Class") +
-      labs(title = "KNN Decision Boundary (k=1)",
-           subtitle = "Black line indicates the Bayes-style decision boundary") +
-       geom_contour(data = predicted.gridxy, aes(x = X1, y = X2, z = Y1 +1),  
-                   breaks = 1.5, color = "black", size = 1) +  
-    theme_minimal()
+```{r}
+ggplot() +
+  # Background: Show the decision regions
+  geom_raster(data = predicted.gridxy, aes(x = X1, y = X2, fill = as.factor(Y1)), alpha = 0.3) +
+  # The Boundary: The contour line where Y changes
+  geom_contour(data = predicted.gridxy, aes(x = X1, y = X2, z = Y1), 
+                breaks = 1.5, color = "black", size = 1) +
+  # The actual data points
+  geom_point(data = training, aes(x = X1, y = X2, color = as.factor(Y))) +
+  scale_fill_manual(values = c("red", "blue"), name = "Region") +
+  scale_color_manual(values = c("red", "blue"), name = "Actual Class") +
+  labs(title = "KNN Decision Boundary (k=1)",
+        subtitle = "Black line indicates the Bayes-style decision boundary") +
+    geom_contour(data = predicted.gridxy, aes(x = X1, y = X2, z = Y1 +1),  
+                breaks = 1.5, color = "black", size = 1) +  
+theme_minimal()
 
-    ggplot() +
-      # Background: Show the decision regions
-      geom_raster(data = predicted.gridxy, aes(x = X1, y = X2, fill = as.factor(Y5)), alpha = 0.3) +
-      # The Boundary: The contour line where Y changes
-      geom_contour(data = predicted.gridxy, aes(x = X1, y = X2, z = Y5), 
-                   breaks = 1.5, color = "black", size = 1) +
-      # The actual data points
-      geom_point(data = training, aes(x = X1, y = X2, color = as.factor(Y))) +
-      scale_fill_manual(values = c("red", "blue"), name = "Region") +
-      scale_color_manual(values = c("red", "blue"), name = "Actual Class") +
-      labs(title = "KNN Decision Boundary (k=5)",
-           subtitle = "Black line indicates the Bayes-style decision boundary") +
-       geom_contour(data = predicted.gridxy, aes(x = X1, y = X2, z = Y5 +1),  
-                   breaks = 1.5, color = "black", size = 1) +  
-    theme_minimal()
-    ```
+ggplot() +
+  # Background: Show the decision regions
+  geom_raster(data = predicted.gridxy, aes(x = X1, y = X2, fill = as.factor(Y5)), alpha = 0.3) +
+  # The Boundary: The contour line where Y changes
+  geom_contour(data = predicted.gridxy, aes(x = X1, y = X2, z = Y5), 
+                breaks = 1.5, color = "black", size = 1) +
+  # The actual data points
+  geom_point(data = training, aes(x = X1, y = X2, color = as.factor(Y))) +
+  scale_fill_manual(values = c("red", "blue"), name = "Region") +
+  scale_color_manual(values = c("red", "blue"), name = "Actual Class") +
+  labs(title = "KNN Decision Boundary (k=5)",
+        subtitle = "Black line indicates the Bayes-style decision boundary") +
+    geom_contour(data = predicted.gridxy, aes(x = X1, y = X2, z = Y5 +1),  
+                breaks = 1.5, color = "black", size = 1) +  
+theme_minimal()
+```
 
 Summarize the Q1, Q2, and Q3 aspects of this "project." Use your imagination. Everyone should have a different scenario.
 
