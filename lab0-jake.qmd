@@ -1,5 +1,5 @@
 ---
-title: "Lab0"
+title: "Lab0 Team ROCstars"
 author: "Ryan Morreale, Emery Berry, Jacob Krol"
 format: pdf
 editor: visual
@@ -224,7 +224,7 @@ Train data.
 ```{r}
 library(class)
 library(tidyverse)
-#Generative model
+
 set.seed(116) #setting a random seed so that we can reproduce everything exactly if we want to
 
 generate_y <- function(x1,x2) { #two input parameters to generate the output y
@@ -259,7 +259,7 @@ for (i in 1:n) {
   Y_te[i] <- generate_y(X1_te[i],X2_te[i])
 }
 
-sum(Y) #43 1's, which is much closer to the 51.5% true rate
+sum(Y_te) #43 1's, which is much closer to the 51.5% true rate
 testing <- cbind(X1_te,X2_te,Y_te)
 
 ```
@@ -347,6 +347,6 @@ cat("Predicted Y for (X1=0.5, X2=0.5) with k=7:", predicted_y_k7, "\n")
 rm(list = ls())
 ```
 
-###### Summary
+###### Summary (Jake)
 
 I used KNN to predict a binary disease state based on a diagnostic test result and doctor's belief. Misclassification rates were 0.47 and 0.43 for k=3 and k=7, respectively. Since both classes' features were generated from a random uniform distribution, I did not expect much better performance than a random model: misclassification rate = 0.5. Qualitatively, decision boundary plots show that misclassification often occurs near a boundary. Finally, I evaluated a new patient test point with diagnostic test and doctor's belief both at 0.5, KNN predicted a disease state of 1 for both k values. This is bad because X1,X2=0.5 implies that both the test and the doctor were uncertain about the diagnosis, yet the model is forced to pick a definite outcome; in this case, the model chose to diagnose the disease. In my opinion, the misclassification performance being close to a baseline model is not sufficient for real clinical use. Furthermore, the ethical implications of incorrect model predictions on patient health are serious. Therefore, I would not recommend using KNN as a diagnostic tool in this scenario.
