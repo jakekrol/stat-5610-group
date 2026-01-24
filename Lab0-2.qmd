@@ -27,7 +27,7 @@ Team Name: ROCstars
 
 Goals: ??
 
-![](images/clipboard-4086253343.png){width="643"}
+![](images/clipboard-4086253343.png){width="564"}
 
 #### Individual Sections
 
@@ -35,7 +35,7 @@ Each individual must complete their own subsection, which must include:
 
 -   a photo of yourself with a caption explaining the context
 
-![](images/clipboard-3686530741.png){width="643"}
+    ![](images/clipboard-3686530741.png){width="544"}
 
 This is a photo of me with my mom and 2 sisters this winter break in Puerto Vallarta, MX, taking a sunset selfie before dinner. It was my first time in Mexico and I had a great time.
 
@@ -103,7 +103,7 @@ generate_y <- function(x1,x2) { #two input parameters to generate the output y
 We are going to use our generating model to create a test set of 100 predictors (x1, x2), and then 100 outcomes. Then we plot all three variables just to see what the generating model is doing.
 
 ```{r}
-# Generate a dataset with 100 points
+# Generate a training dataset with 100 points
 set.seed(116)
 n = 100
 X1 <- runif(n,0,1)
@@ -151,6 +151,9 @@ testing <- cbind(X1,X2,Y)
 #Let's plot the test set. Does it look like the training set? Yeah, looks similar.
 ggplot(data=testing, aes(x=X1, y=X2, color=Y)) +
   geom_point()
+
+predicted.ys1 <- knn(train = training[,1:2], test = testing[,1:2], cl=training[,3],k=1)
+predicted.ys <- knn(train = training[,1:2], test = testing[,1:2], cl=training[,3],k=5)
 ```
 
 #### What individuals need to do
@@ -159,59 +162,94 @@ ggplot(data=testing, aes(x=X1, y=X2, color=Y)) +
 
     ```{r}
 
-    train_X <- training[,1:2]
-    test_X  <- testing[,1:2]
+    testing.grid <- expand.grid(X1 = seq(0, 1, by = .01), 
+                                X2 = seq(0, 1, by = .01))
 
-    train_Y <- training[,3]
+    predicted.grid1 <- knn(train = training[,1:2], 
+                          test = testing.grid, 
+                          cl = training[,3], 
+                          k = 1)
+    predicted.grid5 <- knn(train = training[,1:2], 
+                          test = testing.grid, 
+                          cl = training[,3], 
+                          k = 5)
 
-    pred_k2 <- knn(train = train_X, test = test_X, cl = train_Y, k = 2)
-    pred_k6 <- knn(train = train_X, test = test_X, cl = train_Y, k = 6)
-
+    predicted.gridxy <- testing.grid
+    predicted.gridxy$Y1 <- as.numeric(predicted.grid1) -1
+    predicted.gridxy$Y5 <- as.numeric(predicted.grid5) -1 
     ```
 
 2.  Calculate the misclassification rate for each k. If you don't know how to do this, ask a teammate or the professor.
 
 ```{r}
-true_Y <- testing[,3]
+misclass_rate <- function(predictions, truth) {
+  1 - sum(predictions == truth) / length(predictions)
+}
 
-misclass_k2 <- mean(pred_k2 != true_Y)
-misclass_k6 <- mean(pred_k6 != true_Y)
+pred_k1 <- knn(train = training[,1:2],
+               test = testing[,1:2],
+               cl = training[,3],
+               k = 1)
 
-misclass_k2
-misclass_k6
+pred_k5 <- knn(train = training[,1:2],
+               test = testing[,1:2],
+               cl = training[,3],
+               k = 5)
+
+mis_k1 <- misclass_rate(pred_k1, testing[,3])
+mis_k5 <- misclass_rate(pred_k5, testing[,3])
+
+mis_k1
+mis_k5
 ```
 
 1.  If possible, plot the decision boundaries for your k values.
 
-```{r}
-x1_range <- seq(min(train_X[,1]), max(train_X[,1]), length.out = 200)
-x2_range <- seq(min(train_X[,2]), max(train_X[,2]), length.out = 200)
-grid_knn <- expand.grid(X1 = x1_range, X2 = x2_range)
+    ```{r}
+    ggplot() +
+      # Background: Show the decision regions
+      geom_raster(data = predicted.gridxy, aes(x = X1, y = X2, fill = as.factor(Y1)), alpha = 0.3) +
+      # The Boundary: The contour line where Y changes
+      geom_contour(data = predicted.gridxy, aes(x = X1, y = X2, z = Y1), 
+                   breaks = 1.5, color = "black", size = 1) +
+      # The actual data points
+      geom_point(data = training, aes(x = X1, y = X2, color = as.factor(Y))) +
+      scale_fill_manual(values = c("red", "blue"), name = "Region") +
+      scale_color_manual(values = c("red", "blue"), name = "Actual Class") +
+      labs(title = "KNN Decision Boundary (k=1)",
+           subtitle = "Black line indicates the Bayes-style decision boundary") +
+       geom_contour(data = predicted.gridxy, aes(x = X1, y = X2, z = Y1 +1),  
+                   breaks = 1.5, color = "black", size = 1) +  
+    theme_minimal()
 
-grid$pred_k2 <- knn(train = train_X, test = grid_knn, cl = train_Y, k = 2)
-grid$pred_k6 <- knn(train = train_X, test = grid_knn, cl = train_Y, k = 6)
+    ggplot() +
+      # Background: Show the decision regions
+      geom_raster(data = predicted.gridxy, aes(x = X1, y = X2, fill = as.factor(Y5)), alpha = 0.3) +
+      # The Boundary: The contour line where Y changes
+      geom_contour(data = predicted.gridxy, aes(x = X1, y = X2, z = Y5), 
+                   breaks = 1.5, color = "black", size = 1) +
+      # The actual data points
+      geom_point(data = training, aes(x = X1, y = X2, color = as.factor(Y))) +
+      scale_fill_manual(values = c("red", "blue"), name = "Region") +
+      scale_color_manual(values = c("red", "blue"), name = "Actual Class") +
+      labs(title = "KNN Decision Boundary (k=5)",
+           subtitle = "Black line indicates the Bayes-style decision boundary") +
+       geom_contour(data = predicted.gridxy, aes(x = X1, y = X2, z = Y5 +1),  
+                   breaks = 1.5, color = "black", size = 1) +  
+    theme_minimal()
+    ```
 
-ggplot(grid, aes(x=X1, y=X2, fill=pred_k2)) +
-  geom_tile(alpha=0.3) +
-  geom_point(data=cbind(train_X, train_Y), aes(x=X1, y=X2, color=factor(train_Y)), size=2) +
-  scale_fill_manual(values=c("blue","red"), name="Prediction") +
-  scale_color_manual(values=c("blue","red"), name="True Y") +
-  labs(title="KNN Decision Boundary (k=2)", x="X1", y="X2") +
-  theme_minimal()
-
-# Decision boundary for k=6
-ggplot(grid, aes(x=X1, y=X2, fill=pred_k6)) +
-  geom_tile(alpha=0.3) +
-  geom_point(data=cbind(train_X, train_Y), aes(x=X1, y=X2, color=factor(train_Y)), size=2) +
-  scale_fill_manual(values=c("blue","red"), name="Prediction") +
-  scale_color_manual(values=c("blue","red"), name="True Y") +
-  labs(title="KNN Decision Boundary (k=6)", x="X1", y="X2") +
-  theme_minimal()
-
-```
+<!-- -->
 
 1.  Summarize the Q1, Q2, and Q3 aspects of this "project." Use your imagination. Everyone should have a different scenario.
-2.  Think about and discuss with your team some of the bonus questions below.
+
+Q1. Y can represent whether a soccer shot results in a goal 1=goal, 0=no goal). X1= Shot Distance(0-1 where larger value indicates a farther shot) and X2= Shot Power (0-1 where larger value indicates harder shots). This problem is interesting because teams and analysts often want to know how shot location and shot power influence scoring probability. If we can predict the likelihood of a shot going in, we could evaluate player decision making. An example of this would be if a player shot from 18 yards out (X1=0.18) with a shot power of 50mph (X2=0.5), can we estimate whether it results in a goal.
+
+Q2. To model the relationship between distance, power, and scoring, we applied a K Neares Neighbors classifer. Using the simulated data as training examples, we predicted outcomes for a test set using two values of k, k=1 and k=5. The resulting misclassification rate for k=1 is 0.50 and k=5 is 0.42. For this scenario, increasing k improved predictive accuracy, likely due to smoothing the decision boundary aka. reducing sensitivity to noise. This suggests that performance may benefit from moderate levels of regularization.
+
+Q3. Given X1=0.5 and X2=0.5 the model predicts for both k values 0, which indicates that they would not score. However there are ethical considerations. A model based only on measurable attributes like shot speed and distance ignores contextual variables such as other context like defender pressure or player fatigue. It can also undervalue players strengths.
+
+1.  Think about and discuss with your team some of the bonus questions below.
 
 #### What teams need to do
 
