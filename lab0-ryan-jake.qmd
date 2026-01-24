@@ -525,6 +525,11 @@ ggplot() +
 theme_minimal()
 ```
 
+cleanup
+```{r}
+rm(list = ls())
+```
+
 Summarize the Q1, Q2, and Q3 aspects of this "project." Use your imagination. Everyone should have a different scenario.
 
 Q1. Y can represent whether a soccer shot results in a goal 1=goal, 0=no goal). X1= Shot Distance(0-1 where larger value indicates a farther shot) and X2= Shot Power (0-1 where larger value indicates harder shots). This problem is interesting because teams and analysts often want to know how shot location and shot power influence scoring probability. If we can predict the likelihood of a shot going in, we could evaluate player decision making. An example of this would be if a player shot from 18 yards out (X1=0.18) with a shot power of 50mph (X2=0.5), can we estimate whether it results in a goal.
@@ -532,3 +537,219 @@ Q1. Y can represent whether a soccer shot results in a goal 1=goal, 0=no goal). 
 Q2. To model the relationship between distance, power, and scoring, we applied a K Neares Neighbors classifer. Using the simulated data as training examples, we predicted outcomes for a test set using two values of k, k=1 and k=5. The resulting misclassification rate for k=1 is 0.50 and k=5 is 0.42. For this scenario, increasing k improved predictive accuracy, likely due to smoothing the decision boundary aka. reducing sensitivity to noise. This suggests that performance may benefit from moderate levels of regularization.
 
 Q3. Given X1=0.5 and X2=0.5 the model predicts for both k values 0, which indicates that they would not score. However there are ethical considerations. A model based only on measurable attributes like shot speed and distance ignores contextual variables such as other context like defender pressure or player fatigue. It can also undervalue players strengths.
+
+
+### Emery Berry
+
+#### Technical answers section (Emery)
+
+```{r}
+library(class)
+library(tidyverse)
+```
+
+```{r}
+#Generative model
+set.seed(116) #setting a random seed so that we can reproduce everything exactly if we want to
+
+generate_y <- function(x1,x2) { #two input parameters to generate the output y
+  logit <- x1 -2*x2 -2*x1^2 + x2^2 + 3*x1*x2
+  p <- exp(logit)/(1+exp(logit)) #apply the inverse logit function
+  y <- rbinom(1,1,p) #y becomes a 0 (with prob 1-p) or a 1 with probability p
+}
+```
+
+Generate the training dataset.
+
+```{r}
+# Generate a dataset with 100 points
+set.seed(116)
+n = 100
+X1 <- runif(n,0,1)
+X2 <- runif(n,0,1)
+
+#I'm going to use a for loop to generate 100 y's
+Y <- rep(0,n) #initializing my Y to be a vector of 0's
+for (i in 1:n) {
+  Y[i] <- generate_y(X1[i],X2[i])
+}
+
+sum(Y) #How many 0's and 1's were predicted? In this training set, 42% were 1's. However, almost 48% are 1's when n is large. That's quite close to 50/50 so we shouldn't have issues with "imbalance," which is something we'll learn about later in the semester.
+
+training <- cbind(X1,X2,Y) #combining all of my variables into a training dataset
+ggplot(data=training, aes(x=X1, y=X2, color=Y)) +
+  geom_point()
+```
+
+Create the test dataset (using random seed=121)
+```{r}
+# Create the training dataset as above using seed=116
+# Create a testing dataset using seed=121
+
+set.seed(121)
+n = 100
+X1 <- runif(n,0,1)
+X2 <- runif(n,0,1)
+
+#I'm going to use a for loop to generate 100 y's
+Y <- rep(0,n) #initializing my Y to be a vector of 0's
+for (i in 1:n) {
+  Y[i] <- generate_y(X1[i],X2[i])
+}
+
+sum(Y) #43 1's, which is much closer to the 51.5% true rate
+testing <- cbind(X1,X2,Y)
+
+#Let's plot the test set. Does it look like the training set? Yeah, looks similar.
+ggplot(data=testing, aes(x=X1, y=X2, color=Y)) +
+  geom_point()
+```
+
+Fit KNN for k=4 and k=8.
+
+```{r}
+train_X <- training[,1:2]
+test_X  <- testing[,1:2]
+train_Y <- training[,3]
+
+
+KNN_k4 <- knn(train = train_X, test = test_X, cl = train_Y, k = 4)
+KNN_k8 <- knn(train = train_X, test = test_X, cl = train_Y, k = 8)
+
+```
+
+Evaluate misclassification rate for each k.
+
+```{r}
+true_Y <- testing[,3]
+
+misclass_rate <- function(predictions, test.truth) { #Given the model predictions and the true classifications
+  1-(sum(predictions==test.truth)/length(predictions))
+}
+
+misclass_rate(KNN_k4, true_Y)
+misclass_rate(KNN_k8, true_Y)
+```
+
+Plot decision boundary.
+
+```{r}
+# 1. Setup the Grid correctly
+# Ensure the grid names match your training column names (X1, X2)
+testing.grid <- expand.grid(X1 = seq(0, 1, by = .01), 
+                            X2 = seq(0, 1, by = .01))
+
+# 2. Run KNN on the grid
+# We convert the output to numeric so geom_contour can read it
+predicted.grid.4 <- knn(train = train_X, 
+                      test = testing.grid, 
+                      cl = train_Y, 
+                      k = 4)
+predicted.grid.8 <- knn(train = train_X, 
+                        test = testing.grid,
+                        cl = train_Y,
+                        k = 8)
+
+# 3. Combine grid coordinates with predictions
+predicted.gridxy.4 <- testing.grid
+predicted.gridxy.4$Y <- as.numeric(predicted.grid.4) -1  
+
+predicted.gridxy.8 <- testing.grid
+predicted.gridxy.8$Y <- as.numeric(predicted.grid.8) -1
+
+
+# Plotting K=4
+ggplot() +
+  # Background: Show the decision regions
+  geom_raster(data = predicted.gridxy.4, aes(x = X1, y = X2, fill = as.factor(Y)), alpha = 0.5) +
+  # The Boundary: The contour line where Y changes
+  geom_contour(data = predicted.gridxy.4, aes(x = X1, y = X2, z = Y), 
+                breaks = 1.5, color = "black", size = 0.5) +
+  # The actual data points
+  geom_point(data = training, aes(x = X1, y = X2, color = as.factor(Y))) +
+  scale_fill_manual(values = c("hotpink", "lightskyblue"), name = "Region") +
+  scale_color_manual(values = c("hotpink4", "royalblue"), name = "Actual Class") +
+  labs(title = "KNN Decision Boundary (k=4)",
+        subtitle = "Black line indicates the Bayes-style decision boundary") +
+    geom_contour(data = predicted.gridxy.4, aes(x = X1, y = X2, z = Y +1),  
+                breaks = 1.5, color = "black", size = 0.5) + # Add 1 to Y to make the contours actually plot. I don't know why the black boundary won't plot if z is 0 or 1.
+theme_minimal()
+
+#Plotting K=8
+ggplot() +
+  # Background: Show the decision regions
+  geom_raster(data = predicted.gridxy.8, aes(x = X1, y = X2, fill = as.factor(Y)), alpha = 0.5) +
+  # The Boundary: The contour line where Y changes
+  geom_contour(data = predicted.gridxy.8, aes(x = X1, y = X2, z = Y), 
+                breaks = 1.5, color = "black", size = 0.5) +
+  # The actual data points
+  geom_point(data = training, aes(x = X1, y = X2, color = as.factor(Y))) +
+  scale_fill_manual(values = c("hotpink", "lightskyblue"), name = "Region") +
+  scale_color_manual(values = c("hotpink4", "royalblue"), name = "Actual Class") +
+  labs(title = "KNN Decision Boundary (k=8)",
+        subtitle = "Black line indicates the Bayes-style decision boundary") +
+    geom_contour(data = predicted.gridxy.8, aes(x = X1, y = X2, z = Y +1),  
+                breaks = 1.5, color = "black", size = 0.5) + # Add 1 to Y to make the contours actually plot. I don't know why the black boundary won't plot if z is 0 or 1.
+theme_minimal()
+
+```
+
+Cleanup
+```{r}
+rm(list = ls())
+```
+
+## Team applied answers
+
+The minimum misclassification rate (0.38) was acheived for k=8. Jake evaluated k=3,7 with misclassification rates of 0.47 and 0.43, respectively. Ryan evaluated k=1,5 with misclassification rates of 0.5 and 0.42, respectively. And, Emery evaluated k=4,8 with misclassification rates of 0.41 and 0.38. We plotted the decision boundary for k=8 below.
+```{r}
+library(class)
+library(tidyverse)
+K=8
+# train
+set.seed(116) 
+n = 100
+X1_tr <- runif(n,0,1)
+X2_tr <- runif(n,0,1)
+generate_y <- function(x1,x2) { 
+  logit <- x1 -2*x2 -2*x1^2 + x2^2 + 3*x1*x2
+  p <- exp(logit)/(1+exp(logit)) 
+  y <- rbinom(1,1,p) 
+}
+Y_tr <- rep(0,n) 
+for (i in 1:n) {
+  Y_tr[i] <- generate_y(X1_tr[i],X2_tr[i])
+}
+training <- cbind(X1_tr,X2_tr,Y_tr)
+
+# test
+set.seed(121)
+n = 100
+X1_te <- runif(n,0,1)
+X2_te <- runif(n,0,1)
+Y_te <- rep(0,n)
+for (i in 1:n) {
+  Y_te[i] <- generate_y(X1_te[i],X2_te[i])
+}
+testing <- cbind(X1_te,X2_te,Y_te)
+# plot decision boundary for k=8
+
+test_grid <- expand.grid(
+  X1 = seq(0, 1, by = 0.01),
+  X2 = seq(0, 1, by = 0.01)
+)
+
+test_grid$y_pred_k8 <- knn(
+  train= training[, 1:2],
+  test= test_grid,
+  cl= training[, 3],
+  k=8
+)
+ggplot() +
+  geom_tile(data = test_grid, aes(x = X1, y = X2, fill = y_pred_k8), alpha = 0.5) +
+  geom_point(data = as.data.frame(training), aes(x = X1_tr, y = X2_tr, color = as.factor(Y_tr))) +
+  labs(title = "KNN Decision Boundary (k=8)", fill = "Predicted Y", color = "Training Y") +
+  scale_fill_manual(values = c("0" = "lightblue", "1" = "salmon")) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red")) 
+
+```

@@ -199,7 +199,7 @@ I love to cook, but I am not very good at it.
 - The variable X1 is the outcome of a diagnostic test (e.g., bloodwork) for a disease. The test score ranges from 0 to 1. 0 is the lowest confidence that the patient has the disease. 1 implies the highest confidence that the patient has the disease.
 - The variable X2 is doctor's belief that the patient has the disease. Belief also ranges from 0 to 1 with 0 being the lowest confidence and 1 being the highest confidence.
 
-A hosptial is considering using their historical electronic health records (EHR) data on 
+A hosptial is interested in improving disease diagnosis using both diagnostic test results and doctor's belief states to fit a KNN model that automatically predicts disease state. 
 
 ##### Q1,Q2,Q3 for story (Jake)
 
@@ -530,6 +530,8 @@ cleanup
 rm(list = ls())
 ```
 
+#### QQQ (Ryan)
+
 Summarize the Q1, Q2, and Q3 aspects of this "project." Use your imagination. Everyone should have a different scenario.
 
 Q1. Y can represent whether a soccer shot results in a goal 1=goal, 0=no goal). X1= Shot Distance(0-1 where larger value indicates a farther shot) and X2= Shot Power (0-1 where larger value indicates harder shots). This problem is interesting because teams and analysts often want to know how shot location and shot power influence scoring probability. If we can predict the likelihood of a shot going in, we could evaluate player decision making. An example of this would be if a player shot from 18 yards out (X1=0.18) with a shot power of 50mph (X2=0.5), can we estimate whether it results in a goal.
@@ -540,6 +542,36 @@ Q3. Given X1=0.5 and X2=0.5 the model predicts for both k values 0, which indica
 
 
 ### Emery Berry
+
+#### Non-technical answers section (Emery)
+
+Each individual must complete their own subsection, which must include:
+
+-   a photo of yourself with a caption explaining the context
+
+    ![](images/IMG_1640.jpeg)
+
+    Me and a group of friends doing a via ferrata in my home town of Telluride!
+
+-   at least one (non-statistics) question you would like to know the answer to that could potentially be answered by applying statistical learning methods to data
+
+    I want to know what arguments or actions are most successful when convincing people of the threat of climate change. Can we use data to better communicate this threat to national and global populations?
+
+-   what you would love to be doing six months after graduation and then five years after that (what would make you excited to be doing?)
+
+    Six months after graduation I am currently hoping to live in Sydney Australia while completing my masters in data science. I hope this can also be a good starting point for my future career. In my ideal world, five years from now I would be living somewhere with direct access to nature and the outdoors while using my skills in data science to help solve problems related to climate change and the overall health of our global environments.
+
+-   what you hope your greatest career accomplishment will be
+
+    I hope my greatest career accomplishment is that my work in data science is used to help implement policy to fight climate change or protect the natural world.
+
+-   and given these hopes and goals, what you are hoping to learn/accomplish/do in this course.
+
+    I am hoping this course give me the skills and knowledge to break into a career in data science. My main goal is to feel prepared and confident when it comes to interviews and future positions in this field.
+
+-   You must also include something of your own choosing not described above. Anything. Be creative!
+
+    A fun fact about me is that while rafting the salmon river in Idaho two summers ago, I ended up rafting through a wildfire burning on each side of the river.
 
 #### Technical answers section (Emery)
 
@@ -698,6 +730,24 @@ Cleanup
 ```{r}
 rm(list = ls())
 ```
+
+#### QQQ (Emery)
+
+Summarize the Q1, Q2, and Q3 aspects of this "project." Use your imagination. Everyone should have a different scenario.
+
+A Possible story for this project would be trying to understand how climate change affects the likelihood of wildfires causing major damage in rural areas.
+
+Y - A binary indicator of whether significant wildfire damage occurs in a region. 1 being there is damage, and 0 being no damage or insignificant damage.
+
+X1 - Average summer temperature scaled from 0 to 1, with one being higher than average temperatures recorded.
+
+X2 - Average summer rainfall levels scaled from 0 to 1, lower values indicating drier conditions.
+
+Q1 - This project focuses on predicting major wildfire damage using simple climate variables related to climate change. The goal is to understand how temperature and rainfall relate to wildfire risk and support planning decisions.
+
+Q2 - Historical climate and wildfire data would be split into training and testing sets. A K-nearest neighbors model would be fit and evaluated using misclassification rate.
+
+Q3 - Results would include model accuracy and predicted wildfire risk under given climate conditions. These findings would help assess whether KNN is appropriate for wildfire risk prediction. And possibly help to implement risk management strategies within regions most affected.
 
 ## Team applied answers
 
