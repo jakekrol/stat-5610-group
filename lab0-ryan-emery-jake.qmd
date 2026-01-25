@@ -803,3 +803,104 @@ ggplot() +
   scale_color_manual(values = c("0" = "blue", "1" = "red")) 
 
 ```
+
+From the k=8 decision boundary plot, the point X1=0.5, X2=0.5 is in the Y=0 region. 
+
+Concretely,
+```{r}
+x_0 <- data.frame(X1=0.5, X2=0.5)
+y_pred_8 <- knn(
+  train= training[, 1:2],
+  test= x_0,
+  cl= training[, 3],
+  k=8
+)
+print(y_pred_8)
+
+```
+
+### Bonus questions
+
+1. Since we found optimal k was 8, we will evaluate misclassification for k = 1, ..., k=16.
+
+```{r}
+ks <- 1:16
+mcrate <- c()
+n_test <- nrow(testing)
+for (k in ks) {
+  y_pred <- knn(train = training[,1:2], test = testing[,1:2], 
+                       cl = training[,3], k = k)
+  misclass_rate <- sum(y_pred != testing[,3]) / n_test
+  mcrate <- c(mcrate, misclass_rate)
+}
+plot(ks, mcrate, type='b', xlab='k value', ylab='Misclassification Rate', main='KNN Misclassification Rate vs k')
+```
+
+2. How is misclassification rate decomposed into variance, bias, and irreducible error for KNN classifier?
+
+The test misclassification rate is the sum of model variance, squared model bias, and irreducible error. Where, irreducible error is the random noise in the data that is unrelated to the predictor variables.
+
+Concretely, high variance implies that the model is sensitive to training data changes, resulting in overfitting.
+
+To show this, we test 3 different training datasets generated with different random seeds, and re-evaluate misclassification rate for k=8 on the same test set.
+
+```{r}
+seeds <- c(1,2,3)
+mcrate_var <- c()
+n_test <- nrow(testing)
+for (s in seeds) {
+  set.seed(s)
+  n = 100
+  X1_tr <- runif(n,0,1)
+  X2_tr <- runif(n,0,1)
+  Y_tr <- rep(0,n)
+  for (i in 1:n) {
+    Y_tr[i] <- generate_y(X1_tr[i],X2_tr[i])
+  }
+  training_s <- cbind(X1_tr,X2_tr,Y_tr)
+  y_pred <- knn(train = training_s[,1:2], test = testing[,1:2], 
+                       cl = training_s[,3], k = 8)
+  misclass_rate <- sum(y_pred != testing[,3]) / n_test
+  mcrate_var <- c(mcrate_var, misclass_rate)
+}
+# do barplot of mcrate for different seeds
+barplot(mcrate_var, names.arg = seeds, xlab = "Random Seed", ylab = "Misclassification Rate", main = "KNN Misclassification Rate (k=8) for Different Training Sets")
+```
+
+3. What happens to misclassification rate for points outside the unit square?
+
+We generated 3 test sets that extend beyond the unit square, specifically in the range [-10, 10] for both X1 and X2.
+
+```{r}
+seeds <- c(1,2,3)
+for (s in seeds) {
+  n = 100
+  X1_te_ext <- runif(n,-10,10)
+  X2_te_ext <- runif(n,-10,10)
+  Y_te_ext <- rep(0,n)
+  for (i in 1:n) {
+    Y_te_ext[i] <- generate_y(X1_te_ext[i],X2_te_ext[i])
+  }
+  testing_ext <- cbind(X1_te_ext,X2_te_ext,Y_te_ext)
+  y_pred_ext <- knn(train = training[,1:2], test = testing_ext[,1:2], 
+                      cl = training[,3], k = 8)
+  misclass_rate_ext <- sum(y_pred_ext != testing_ext[,3]) / nrow(testing_ext)
+  print(misclass_rate_ext)
+}
+```
+
+Unexpectedly, the misclassification rates are low for points outside the unit square, 0.17-0.26 depending on the random seed. Despite KNN being a flexible non-parametric model, it appears to generalize well beyond the training data range in this scenario for the generative model used.
+
+## About team
+
+![](images/clipboard-4086253343.png)
+
+Team ROCstars photo.
+
+### Team semester goals
+
+- Improved mathematical understanding and more practice with regression methods
+- Apply statistical learning to real world scenarios
+- Gain skills for future data science internships and careers
+
+
