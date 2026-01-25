@@ -889,7 +889,7 @@ for (s in seeds) {
 }
 ```
 
-Unexpectedly, the misclassification rates are low for points outside the unit square, 0.17-0.26 depending on the random seed. Despite KNN being a flexible non-parametric model, it appears to generalize well beyond the training data range in this scenario for the generative model used.
+Unexpectedly, the misclassification rates are low for points outside the unit square, 0.17-0.27 depending on the random seed. Despite KNN being a flexible non-parametric model, it appears to generalize well beyond the training data range in this scenario for the generative model used.
 
 ## About team
 
