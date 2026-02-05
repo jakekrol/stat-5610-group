@@ -1,0 +1,380 @@
+---
+title: "Lab1"
+author: "Eric Vance"
+format: pdf
+editor: visual
+date: 2026-01-29
+---
+
+## Lab1: Comparing Classification Methods
+
+**Due: 11:59PM Friday, February 6 on Canvas as a knitted pdf file of your team's Quarto document**
+
+1.  You will individually fit five classification models and compare their sensitivities and specificities.
+2.  You will interpret these models and make a prediction in your individual section.
+3.  As a team, you will create one visualization that summarizes the performance of the models.
+
+### Instructions for Lab1
+
+In Lab0, the professor created a generating model for Y variables taking on 0 or 1 values based on the X1 and X2 inputs. You came up with the backstory for what Y, X1, and X2 were and why it was important to use X1 and X2 to predict Y.
+
+In this lab, you will apply four newly learned statistical learning methods to continue your analyses for how to best predict or explain Y from X1 and X2. You should continue to use the Q1 qualitative context you developed in Lab0 (or you can develop a new one if you want).
+
+Each individual will fit five classification models on a training dataset and then evaluate how well those models classify Y based on a test dataset. Individuals will make a prediction given (x1, x2) and then interpret their prediction and make a recommendation for action. Just as in Lab0, each individual will describe the Q1, Q2, and Q3 for this "project". Specifically, for Q1: What is Y, X1, and X2, and why should we care?. Train your five models on the training set, compare the sensitivity and specificity of the models on the test set, make a prediction given (x1, x2) (this is Q2). Then describe what actions (Q3) you recommend given your Q1 context and your Q2 results. Reflect on some ethical aspect of this project.
+
+#### Generating Model
+
+We have a logistic regression generating model. Given $x_1 \in [0,1]$ and $x_2 \in [0,1], Y \sim Ber(p)$, where $p$ is related to $x_1$ and $x_2$ through the logistic link function: $\log(\frac{p}{(1-p)}) = x_1 -2x_2 -2{x_1}^{2} + {x_2}^{2} + 3{x_1}{x_2}$, where $\log$ is the natural log, sometimes written as $\ln$.
+
+#### Test datasets
+
+Each individual will generate a test set of 1000 predictors (x1, x2) and outcomes (y) that we will use as our "ground truth".
+
+So, create your individual test dataset (using random seed=201, 202, 203, or 204; each teammate has a different test dataset).
+
+```{r}
+# Create the training dataset as above using seed=200
+# Create a testing dataset using seed=201, 202, 203, or 204
+
+set.seed(201)
+n = 1000
+
+```
+
+#### What individuals need to do
+
+1.  Given the training set (seed=200), fit:
+    1.  logistic regression model
+    2.  linear discriminant analysis (LDA)
+    3.  quadratic discriminant analysis (QDA)
+    4.  naive Bayes
+    5.  KNN with k=optimal k from Lab0
+2.  Calculate the sensitivity, specificity, and overall error rate (misclassification rate) for each model given your test set (your seed=201 or 202 or 203 or 204).
+3.  Make a prediction for a new point (x1, x2) = (0.25, 0.25) or (0.25, 0.75) or (0.75, 0.25) or (0.75, 0.75) for each fitted model. Each individual will have a different point for their predictions.
+4.  Summarize the Q1, Q2, and Q3 aspects of this "project."
+
+**Individual Section - Emery**
+
+**Train Set Up**
+
+```{r}
+library(class)
+suppressPackageStartupMessages(library(tidyverse))
+```
+
+```{r}
+#Generative model
+set.seed(200) #setting a random seed so that we can
+#reproduce everything exactly if we want to
+
+generate_y <- function(x1,x2) { #two input parameters to generate the output y
+  logit <- x1 -2*x2 -2*x1^2 + x2^2 + 3*x1*x2
+  p <- exp(logit)/(1+exp(logit)) #apply the inverse logit function
+  y <- rbinom(1,1,p) #y becomes a 0 (with prob 1-p) or a 1 with probability p
+}
+```
+
+```{r}
+# Generate a training dataset with 1000 points
+set.seed(200)
+n = 1000
+X1 <- runif(n,0,1)
+X2 <- runif(n,0,1)
+
+#I'm going to use a for loop to generate 1000 y's
+Y <- rep(0,n) #initializing my Y to be a vector of 0's
+for (i in 1:n) {
+  Y[i] <- generate_y(X1[i],X2[i])
+}
+
+sum(Y) #How many 0's and 1's were predicted? In this
+#training set, almost 47% were 1's. When n is very large
+# about 48% of the Y's are 1's. That's close enough to
+# 50/50 so we shouldn't have issues with "imbalance"
+# which is something we'll learn about later in the 
+# semester.
+
+training <- cbind(X1,X2,Y) #combining all of my variables into a training dataset
+ggplot(data=training, aes(x=X1, y=X2, color=Y)) +
+  geom_point()
+```
+
+**Test Set Up**
+
+-   Seed used is 201, and point evaluated is (0.25, 0.25)
+
+```{r}
+set.seed(201)
+n = 1000
+
+X1_test <- runif(n,0,1)
+X2_test <- runif(n,0,1)
+
+Y_test <- rep(0,n) 
+for (i in 1:n) {
+  Y_test[i] <- generate_y(X1_test[i],X2_test[i])
+}
+
+test <- as.data.frame(cbind(X1_test,X2_test,Y_test))
+
+table(test$Y_test)
+```
+
+**Logistic Regression**
+
+```{r}
+# Fit model
+log_model <- glm(Y ~ X1 + X2, data = as.data.frame(training), family = binomial)
+
+# Set correct predictor names
+test_for_pred <- data.frame(
+  X1 = test$X1_test,
+  X2 = test$X2_test
+)
+
+# Predict on test set
+y_pred <- ifelse(
+  predict(log_model, newdata = test_for_pred, type = "response") > 0.5,
+  1,
+  0
+)
+
+# Confusion matrix
+cm <- table(Predicted = y_pred, Actual = test$Y_test)
+cm
+
+# Metrics
+TP <- cm["1","1"]; TN <- cm["0","0"]
+FP <- cm["1","0"]; FN <- cm["0","1"]
+
+sensitivity_logistic <- TP / (TP + FN)
+specificity_logistic <- TN / (TN + FP)
+error_rate_logistic  <- 1 - sum(diag(cm)) / sum(cm)
+
+print(paste0(
+  "Sensitivity: ", round(sensitivity_logistic,3),
+  ", Specificity: ", round(specificity_logistic,3),
+  ", MisClass Rate: ", round(error_rate_logistic,3)
+))
+
+# New point prediction
+new_pt <- data.frame(X1 = 0.25, X2 = 0.25)
+
+logistic_point_pred <- ifelse(
+  predict(log_model, newdata = new_pt, type = "response") > 0.5,
+  1,
+  0
+)
+
+print(paste0(
+  "Logistic Regression Prediction at (0.25, 0.25): ",
+  logistic_point_pred
+))
+```
+
+**Linear Discriminant Analysis**
+
+```{r}
+# Packages
+library(MASS)  # lda()
+
+# Fit LDA
+lda_model <- lda(Y ~ X1 + X2, data = as.data.frame(training))
+
+# Test data with correct predictor names
+test_for_pred <- data.frame(
+  X1 = test$X1_test,
+  X2 = test$X2_test
+)
+
+# Predict on test set
+lda_pred <- predict(lda_model, newdata = test_for_pred)$class
+
+# Confusion matrix
+cm <- table(Predicted = lda_pred, Actual = test$Y_test)
+cm
+
+# Metrics
+TP <- cm["1","1"]; TN <- cm["0","0"]
+FP <- cm["1","0"]; FN <- cm["0","1"]
+
+sensitivity_lda <- TP / (TP + FN)
+specificity_lda <- TN / (TN + FP)
+error_rate_lda  <- 1 - sum(diag(cm)) / sum(cm)
+
+print(paste0(
+  "Sensitivity: ", round(sensitivity_lda,3),
+  ", Specificity: ", round(specificity_lda,3),
+  ", MisClass Rate: ", round(error_rate_lda,3)
+))
+
+# New point prediction
+new_pt <- data.frame(X1 = 0.25, X2 = 0.25)
+
+lda_point_pred <- predict(lda_model, newdata = new_pt)$class
+
+print(paste0(
+  "LDA Prediction at (0.25, 0.25): ",
+  lda_point_pred
+))
+```
+
+**Quadratic Discriminant Analysis**
+
+```{r}
+# Fit QDA
+qda_model <- qda(Y ~ X1 + X2, data = as.data.frame(training))
+
+# Test data with correct predictor names
+test_for_pred <- data.frame(
+  X1 = test$X1_test,
+  X2 = test$X2_test
+)
+
+# Predict on test set
+qda_pred <- predict(qda_model, newdata = test_for_pred)$class
+
+# Confusion matrix
+cm <- table(Predicted = qda_pred, Actual = test$Y_test)
+cm
+
+# Metrics
+TP <- cm["1","1"]; TN <- cm["0","0"]
+FP <- cm["1","0"]; FN <- cm["0","1"]
+
+sensitivity_qda <- TP / (TP + FN)
+specificity_qda <- TN / (TN + FP)
+error_rate_qda  <- 1 - sum(diag(cm)) / sum(cm)
+
+print(paste0(
+  "Sensitivity: ", round(sensitivity_qda,3),
+  ", Specificity: ", round(specificity_qda,3),
+  ", MisClass Rate: ", round(error_rate_qda,3)
+))
+
+# New point prediction
+new_pt <- data.frame(X1 = 0.25, X2 = 0.25)
+
+qda_point_pred <- predict(qda_model, newdata = new_pt)$class
+
+print(paste0(
+  "QDA Prediction at (0.25, 0.25): ",
+  qda_point_pred
+))
+```
+
+**Naive Bayes**
+
+```{r}
+library(e1071)  
+
+# Fit Naive Bayes
+nb_model <- naiveBayes(Y ~ X1 + X2, data = as.data.frame(training))
+
+# Test data with correct predictor names
+test_for_pred <- data.frame(
+  X1 = test$X1_test,
+  X2 = test$X2_test
+)
+
+# Predict on test set
+nb_pred <- predict(nb_model, newdata = test_for_pred, type = "class")
+
+# Confusion matrix
+cm <- table(Predicted = nb_pred, Actual = test$Y_test)
+cm
+
+# Metrics
+TP <- cm["1","1"]; TN <- cm["0","0"]
+FP <- cm["1","0"]; FN <- cm["0","1"]
+
+sensitivity_nb <- TP / (TP + FN)
+specificity_nb <- TN / (TN + FP)
+error_rate_nb  <- 1 - sum(diag(cm)) / sum(cm)
+
+print(paste0(
+  "Sensitivity: ", round(sensitivity_nb,3),
+  ", Specificity: ", round(specificity_nb,3),
+  ", MisClass Rate: ", round(error_rate_nb,3)
+))
+
+# New point prediction
+new_pt <- data.frame(X1 = 0.25, X2 = 0.25)
+
+nb_point_pred <- predict(nb_model, newdata = new_pt, type = "class")
+
+print(paste0(
+  "Naive Bayes Prediction at (0.25, 0.25): ",
+  nb_point_pred
+))
+```
+
+**KNN with k=optimal k from Lab0**
+
+```{r}
+library(class)
+# X matrices
+train_X <- as.matrix(training[, c("X1","X2")])
+test_X  <- as.matrix(test[, c("X1_test","X2_test")])
+
+# y vectors (no $)
+train_y <- as.factor(training[, "Y"])
+test_y  <- as.factor(test[, "Y_test"])
+
+# Predict on test, k=8 was our optimal k found in lab 0
+knn_pred <- knn(train = train_X, test = test_X, cl = train_y, k = 8)
+
+# Confusion matrix
+cm <- table(Predicted = knn_pred, Actual = test_y)
+cm
+
+# Metrics
+TP <- cm["1","1"]; TN <- cm["0","0"]
+FP <- cm["1","0"]; FN <- cm["0","1"]
+
+sensitivity_knn <- TP / (TP + FN)
+specificity_knn <- TN / (TN + FP)
+error_rate_knn  <- 1 - sum(diag(cm)) / sum(cm)
+
+print(paste0(
+  "Sensitivity: ", round(sensitivity_knn,3),
+  ", Specificity: ", round(specificity_knn,3),
+  ", MisClass Rate: ", round(error_rate_knn,3)
+))
+
+# New point prediction
+new_pt <- data.frame(X1 = 0.25, X2 = 0.25)
+new_X  <- as.matrix(new_pt)
+
+knn_point_pred <- knn(train = train_X, test = new_X, cl = train_y, k = k_opt)
+
+print(paste0("KNN Prediction at (0.25, 0.25): ", knn_point_pred))
+```
+
+**Q1, Q2, Q3 Aspects**
+
+**Q1.**\
+
+The goal of this project is to predict whether a region experiences significant wildfire damage based on average summer temperature x1 and average summer rainfall x2. We investigate how these climate variables are associated with wildfire risk using several different classification methods.
+
+**Q2.**\
+
+The data are divided into training and test sets. Logistic regression, LDA, QDA, Naive Bayes, and K-nearest neighbors are fit on the training data and evaluated on the test data using sensitivity, specificity, and misclassification rate. Each model is also used to predict the response at a new observation (0.25,0.25)
+
+**Q3.**\
+
+Model performance is compared across methods, and predicted wildfire risk is reported for selected climate conditions. These results are used to assess the suitability of different classification approaches for predicting wildfire damage.
+
+#### What teams need to do
+
+1.  Summarize the models' performance using all of the results from each individual.
+2.  Which is the best model to use in this situation?
+
+#### **Some intended outcomes from this assignment:**
+
+-   You will individually get practice fitting a logistic regression, LDA, QDA, naive Bayes, and KNN
+-   You will compare the performance of these five models
+-   You will make predictions based on statistical learning models
+-   You will practice describing how the Q1 context affects your Q2 and Q3 outcomes, i.e., you will practice thinking about the whole problem (i.e., Q1Q2Q3, not just the Q2 quantitative parts)
+-   You will compare models visually
+-   You will gain experience collaborating with your teammates on an applied problem
