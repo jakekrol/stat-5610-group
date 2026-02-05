@@ -346,7 +346,7 @@ print(paste0(
 new_pt <- data.frame(X1 = 0.25, X2 = 0.25)
 new_X  <- as.matrix(new_pt)
 
-knn_point_pred <- knn(train = train_X, test = new_X, cl = train_y, k = k_opt)
+knn_point_pred <- knn(train = train_X, test = new_X, cl = train_y, k = 8)
 
 print(paste0("KNN Prediction at (0.25, 0.25): ", knn_point_pred))
 ```
