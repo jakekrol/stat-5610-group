@@ -1,0 +1,255 @@
+---
+title: "Lab2"
+author: "STAT 4610/5610 Spring 2026"
+format: pdf
+editor: visual
+date: 2026-02-20
+---
+
+## Lab2: Comparing Nonlinear Regressions
+
+**Due: 11:59PM Friday, February 27 on Canvas as a knitted pdf file of your team's Quarto document**
+
+1.  You will individually fit **six** nonlinear regression models on a single X variable from your team's chosen dataset. You will use CV (including the built-in LOOCV functions in R) on at least three of these models to determine the best tuning parameters (e.g., $\lambda$ , K number of knots or steps, or degrees of freedom). You will compare the six models, choose the best one, make a prediction at an important value of X, interpret the results, and comment on the ethics of the situation.
+2.  Teams will use the individual contributions to build a Generalized Additive Model (GAM), fit it, make predictions, make interpretations, show visualizations, etc.
+3.  Each individual will comment on how they contributed to their team's GAM.
+
+### Instructions for Lab2
+
+In HW2, you applied several types of shrinkage and selection methods for linear models (shrinkage and selection methods) on a dataset of your choosing. This lab will be similar, but you will apply the nonlinear regression methods of Chapter 7 in *ISLR2* and use cross validation to choose the tuning parameters and select the best method. Individuals will model individual variables from the same dataset (one variable for each team member) and then combine their work into one team GAM that uses multiple X variables to predict Y.
+
+#### What teams need to do first
+
+1.  Choose a dataset that has enough interesting X variables that you can combine to model/predict Y. You can use one of the datasets that a teammate used for HW2 or pick a new one. You cannot use the Wage data from *ISLR2*.
+
+    We will be using the Auto data set from ISLR2.
+
+    ```{r}
+    library(ISLR2)
+    library(boot)
+    library(splines)
+    library(gam)
+    library(tidyverse)
+
+    data(Auto)
+    ```
+
+    ```{r}
+    summary(Auto)
+    ```
+
+2.  Decide who will model which X variable individually and when they need to be done to contribute to the team GAM.
+
+    I will do weight
+
+    Emery will do acceleration
+
+    Jake will do displacement
+
+#### What individuals need to do
+
+1.  Given your team's dataset and your X variable, fit a polynomial regression, step function regression, cubic spline, natural spline, smoothing spline, and a local regression (six models).
+
+**Polynomial Regression**
+
+```{r}
+set.seed(1056)
+
+cv_error_poly <- rep(NA, 10)
+
+for (d in 1:10) {
+  fit <- glm(mpg ~ poly(weight, d), data = Auto)
+  cv_error_poly[d] <- cv.glm(Auto, fit)$delta[1]
+}
+
+cv_error_poly
+```
+
+```{r}
+poly_reg <- lm(mpg ~ poly(weight, 5), data = Auto)
+summary(poly_reg)
+```
+
+**Step Function Regression**
+
+```{r}
+cv_error_step <- rep(NA, 10)
+
+for (k in 2:10) {
+  Auto$weight_cut <- cut(Auto$weight, k)
+  fit <- glm(mpg ~ weight_cut, data = Auto)
+  cv_error_step[k] <- cv.glm(Auto, fit)$delta[1]
+}
+
+cv_error_step
+```
+
+```{r}
+step_reg <- lm(mpg ~ cut(weight, breaks = 6), data = Auto)
+
+summary(step_model)
+```
+
+**Cubic Spline**
+
+```{r}
+cv_error_spline <- rep(NA, 10)
+
+for (df in 3:10) {
+  fit <- glm(mpg ~ bs(weight, df=df), data = Auto)
+  cv_error_spline[df] <- cv.glm(Auto, fit)$delta[1]
+}
+
+cv_error_spline
+```
+
+```{r}
+cubic_spline_model <- lm(mpg ~ bs(weight, df = 7), data = Auto)
+
+summary(cubic_spline_model)
+```
+
+**Natural Spline**
+
+```{r}
+cv_error_ns <- rep(NA, 10)
+
+for (df in 3:10) {
+  fit <- glm(mpg ~ ns(weight, df=df), data = Auto)
+  cv_error_ns[df] <- cv.glm(Auto, fit)$delta[1]
+}
+
+cv_error_ns
+```
+
+```{r}
+natural_spline_model <- lm(mpg ~ ns(weight, df = 7), data = Auto)
+
+summary(natural_spline_model)
+```
+
+**Smoothing Spline**
+
+```{r}
+smooth_fit <- smooth.spline(Auto$weight, Auto$mpg, cv = TRUE)
+
+smooth_fit
+```
+
+**Local Regression**
+
+```{r}
+cv_error_loess <- rep(NA, 10)
+spans <- seq(0.1, 1, by=0.1)
+
+for (i in 1:length(spans)) {
+  fit <- loess(mpg ~ weight, data=Auto, span=spans[i])
+  pred <- predict(fit, Auto$weight)
+  cv_error_loess[i] <- mean((Auto$mpg - pred)^2)
+}
+
+cv_error_loess
+best_span <- spans[which.min(cv_error_loess)]
+best_span
+```
+
+```{r}
+loess_reg <- loess(mpg ~ weight, data = Auto, span = 0.1)
+
+summary(loess_reg)
+```
+
+1.  Use CV to determine the optimal tuning parameters for at least three of your models. Sometimes just choosing the tuning parameter (e.g., picking the number of cuts in X for a step function regression) based on your knowledge of Q1 and Q3 makes more sense than using CV.'
+
+Done above while fitting the models\^
+
+1.  Compare the CV MSE or other appropriate model summary (e.g., misclassification rate) for your models. Choose the best model method.
+
+    ```{r}
+    poly_model <- glm(mpg ~ poly(weight, 5), data = Auto)
+    cv_poly <- cv.glm(Auto, poly_model)$delta[1]
+
+    Auto$weight_bins <- cut(Auto$weight, 6)
+    step_model <- glm(mpg ~ weight_bins, data = Auto)
+    cv_step <- cv.glm(Auto, step_model)$delta[1]
+
+    cubic_model <- glm(mpg ~ bs(weight, df = 7), data = Auto)
+    cv_cubic <- cv.glm(Auto, cubic_model)$delta[1]
+
+    natural_model <- glm(mpg ~ ns(weight, df = 7), data = Auto)
+    cv_natural <- cv.glm(Auto, natural_model)$delta[1]
+
+    loess_model <- loess(mpg ~ weight, data = Auto, span = 0.1)
+    pred_loess <- predict(loess_model, Auto$weight)
+    cv_loess <- mean((Auto$mpg - pred_loess)^2)
+
+    results <- data.frame(
+      Model = c("Poly Regression",
+                "Step Function",
+                "Cubic Spline",
+                "Natural Spline",
+                "LOESS"),
+      CV_MSE = c(cv_poly,
+                 cv_step,
+                 cv_cubic,
+                 cv_natural,
+                 cv_loess)
+    )
+
+    results
+    ```
+
+2.  At an important or significant value of X (explain why that value of x0 is important or significant), use your model to predict Y at that value.
+
+    ```{r}
+    best_model <- loess(mpg ~ weight, data = Auto, span = 0.1)
+    mean(Auto$weight)
+    predict(best_model, newdata=data.frame(weight=2977.584))
+    ```
+
+    ```{r}
+    mean(Auto$mpg)
+    ```
+
+3.  Interpret your prediction and generally what the model is telling you about Y.
+
+I selected the mean vehicle weight (2977.6 lbs) as a meaningful value because it represents a typical vehicle in the dataset. Using the best model chosen by lowest MSE across the 6 different options, 15.91, the LOESS model with span = 0.1, the predicted fuel efficiency at this weight is approximately 23.05 miles per gallon. This prediction is very close to the average mpg of the data set which is 23.45 mpg, which suggests that the model produces realistic predictions.
+
+1.  Comment on any ethical implications of this work.
+
+Fuel efficiency is directly related to environmental impact, greenhouse gas emissions, and climate change. Heavier vehicles tend to produce lower fuel efficiency, which contributes to higher carbon emissions. If policymakers and manufacturers use similar modeling techniques to inform regulations and design standards without considering broader social issues, they could disproportionately affect certain consumers and environmental issues. Additionally, this model uses weight as a single predictor, which oversimplifies fuel efficiency. Overreliance on simplified models could lead to misleading conclusions if other important variables are ignored.
+
+1.  Optional: Create visualizations of your models or just of the best model.
+
+```{r}
+plot(Auto$weight, Auto$mpg,
+     xlab = "Weight",
+     ylab = "MPG",
+     main = "LOESS Fit: MPG vs Weight")
+
+lines(sort(Auto$weight),
+      predict(best_model,
+              newdata = data.frame(weight = sort(Auto$weight))),
+      col = "blue",
+      lwd = 2)
+```
+
+#### What teams need to do
+
+1.  Create a GAM based on the work of your individual team members.
+2.  Visualize the GAM (R has some good built-in plotting functions, such as plot.gam()).
+3.  Choose a value of X that is important or interesting (explain why) and use that point to make a prediction for Y. Interpret this prediction.
+4.  How does the GAM compare with a linear method (e.g., lasso, ridge, PCR, etc.)?
+
+#### Individual contributions to team GAM
+
+Each individual must comment on their contributions to the team GAM. For example, write something like: ‘I told person X that my results showed that the natural spline with 4 knots was the best model for variable x1. Then I created a visualization to help interpret the GAM.’ Or, ‘I used the GAM to make a prediction for the point x0.’ Or, ‘I didn’t actually do anything for the team section.’ Only individuals who contribute to the team section will get points for the team section.
+
+#### **Some intended outcomes from this assignment:**
+
+-   You will individually get practice fitting a nonlinear regression models: polynomial regression, step function regression, cubic spline, natural spline, smoothing spline, and local regression
+-   You will practice using CV to select the optimal tuning parameters of your models
+-   You will use CV to compare the performance of these models
+-   You will make predictions based on your models
+-   You will practice fitting and interpreting a GAM
+-   You will gain experience working on a data science "project" as a team
