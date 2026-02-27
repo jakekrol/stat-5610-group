@@ -771,4 +771,18 @@ abline(0,1,lwd=2)
 
 Part 3. Predicted Value
 
+```{r}
+new_data <- data.frame(
+  weight = mean(dat$weight),
+  displacement = mean(dat$displacement),
+  acceleration = mean(dat$acceleration)
+)
+
+gam_prediction <- predict(gam_fit, newdata = new_data)
+
+cat("Predicted mpg for an average car:", round(gam_prediction, 2))
+```
+
+We evaluated the fitted GAM at the mean values of weight, displacement, and acceleration. This is a significant value since it represents a typical car in the dataset. Using these average characteristics, the model predicts a fuel efficiency of 22.09 miles per gallon. Because the GAM allows for flexible nonlinear relationships between mpg and each predictor, this estimate reflects curvature in how weight, displacement, and acceleration influence fuel efficiency rather than assuming purely linear effects.
+
 Part 4. Comparison to Linear Method
