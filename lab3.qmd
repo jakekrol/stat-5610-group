@@ -138,8 +138,7 @@ ggplot(data=test, aes(x=X1_test, y=X2_test, color=Y_test)) +
 #### Outline
 
 -   I will fit an SVM with degree 3 polynomial.
--   I will use 3-fold cross validation to search for the cost and gamma parameters.
-    -   3-fold is faster than 10-fold, but may overestimate test error.
+-   I will use 10-fold cross validation to search for the cost and gamma parameters.
 
 Dependencies
 
@@ -178,7 +177,7 @@ costs <- c(0.1,1)
 gammas <- 10^(-1:1)
 training <- data.frame(X1=X1_train, X2=X2_train, Y=as.factor(Y_train))
 tune.out <- tune(svm, Y ~ ., data=training, kernel="polynomial", degree=3,
-  ranges=list(cost=costs, gamma=gammas), tune.control=tune.control(cross=3))
+  ranges=list(cost=costs, gamma=gammas))
 
 ```
 
@@ -186,7 +185,7 @@ tune.out <- tune(svm, Y ~ ., data=training, kernel="polynomial", degree=3,
 summary(tune.out)
 ```
 
-The best performance of 0.465 error rate was acheived with gamma=0.1 and cost $\in$ {0.1, 1}
+The best performance of 0.465 misclassification rate was acheived with gamma=0.1 and cost $\in$ {0.1, 1} and (cost=0.1, gamma=10).
 
 Since lower cost means wider margin in this SVM implementation, I will choose the lowest cost of 0.1 to avoid overfitting.
 
@@ -249,7 +248,7 @@ Cleanup
 rm(list=ls())
 ```
 
-#### Emery Individual Section
+### Emery Individual Section
 
 ```{r}
 generate_y <- function(x1,x2) { #two input parameters to generate the output y
@@ -365,11 +364,147 @@ cat("For the new point (X1 = 0.25, X2 = 0.25):\n",
     "Correct?    =", ifelse(as.character(prediction) == as.character(actual), "Yes", "No"))
 ```
 
+cleanup 
+```{r}
+rm(list=ls())
+```
+
 #### Lab 1 Comparison and Q3 Recommendation
 
 The linear SVM predicted Y = 0 for the new point (X1 = 0.25, X2 = 0.25), however the true value was Y = 1, meaning the model misclassified this point. This is consistent with Lab 1, where logistic regression, LDA, QDA, and Naive Bayes all also predicted Y = 0. Looking back, we can actually see that the linear SVM only predicts 0, likely because there is too much overlap in the data, and a Linear SVM simply cannot do a good job separating the classes. Notably, KNN with optimal K was the only method across both labs to correctly classify this point, likely because KNN classifies based on the local neighborhood of nearest neighbors rather than a global decision boundary.
 
 In Lab 1, I proposed possible context for this dataset: X1 represents the average summer temperature of a region and X2 represents the average summer rainfall. The goal was to predict whether a region experiences significant wildfire damage (Y = 1) or not (Y = 0). reflecting on this goal in Q3, the false negative and constant prediction of 0 is concerning for wildfire damage prediction. It means many regions that may truly need wildfire assistance are being overlooked. I recommend trying more flexible, locally sensitive classification approaches over a linear boundary when predicting wildfire risk. More flexible SVM approaches, such as polynomial or radial basis function (RBF) kernel SVMs, may better capture the non-linear relationship between average summer temperature, rainfall, and wildfire damage. Using higher degree SVMs could improve classification accuracy, ultimately reducing the risk of missing regions that are truly at high risk for significant wildfire damage.
+
+### Ryan Individual Section
+
+```{r}
+library(class)
+library(e1071)
+
+suppressPackageStartupMessages(library(tidyverse))
+```
+
+```{r}
+#Generative model
+set.seed(200) #setting a random seed so that we can
+#reproduce everything exactly if we want to
+
+generate_y <- function(x1,x2) { #two input parameters to generate the output y
+  logit <- x1 -2*x2 -2*x1^2 + x2^2 + 3*x1*x2 
+  p <- exp(logit)/(1+exp(logit)) #apply the inverse logit function
+  y <- rbinom(1,1,p) #y becomes a 0 (with prob 1-p) or a 1 with probability p
+}
+```
+
+```{r}
+# Generate a training dataset with 1000 points
+set.seed(321)
+n = 1000
+X1 <- runif(n,0,1)
+X2 <- runif(n,0,1)
+
+#I'm going to use a for loop to generate 1000 y's
+Y <- rep(0,n) #initializing my Y to be a vector of 0's
+for (i in 1:n) {
+  Y[i] <- generate_y(X1[i],X2[i])
+}
+
+sum(Y) #How many 0's and 1's were predicted? When n is very large
+# about 48% of the Y's should be 1's. 
+
+training <- cbind(X1,X2,Y) #combining all of my variables into a training dataset
+ggplot(data=training, aes(x=X1, y=X2, color=Y)) +
+  geom_point()
+```
+
+```{r}
+# Create the training dataset as above using seed=321
+# Create a testing dataset using seed=323
+
+set.seed(323)
+n_test = 100
+
+X1_test <- runif(n_test, 0, 1)
+X2_test <- runif(n_test, 0, 1)
+
+Y_test <- rep(0, n_test)
+
+for (i in 1:n_test) {
+  Y_test[i] <- generate_y(X1_test[i], X2_test[i])
+}
+
+test <- data.frame(X1 = X1_test, X2 = X2_test, Y = Y_test)
+table(test$Y)
+```
+
+1.  SVM with degree 2 polynomial
+
+```{r}
+training <- as.data.frame(training)
+training$Y <- as.factor(training$Y)
+test$Y <- as.factor(test$Y)
+
+# Re-tune and refit the SVM
+svm_model <- tune(svm, 
+                  Y ~ X1 + X2,
+                  data = training,
+                  kernel = "polynomial",
+                  degree = 2,
+                  ranges = list(cost = c(0.1, 1, 10),
+                                gamma = c(0.5, 1, 2)))
+```
+
+2.  Use cross validation to choose your tuning parameters.
+
+```{r}
+best_svm <- svm_model$best.model
+summary(best_svm)
+```
+
+3.  Describe what the SVM is doing, i.e., how it classifies points.
+
+The SVM finds a boundary that separates the two classes of Y by maximizing the margin, which is the distance between the boundary and the closest points from each class. With a degree 2 polynomial kernel, the SVM can create a nonlinear boundary by transforming the data into a higher dimensional space, allowing it to capture curved or more complex relationships than a simple linear model.
+
+The SVM identifies a set of 'support vectors' that lie closest to the decision boundary, and these points end up defining the boundary. Points farther away don’t really affect the model. The cost parameter controls how strictly the model tries to classify every point correctly so a high cost penalizes misclassification more and leads to a smaller boundary while a lower cost allows more points to be misclassified, creating a larger boundary that can help reduce variance on the test set.
+
+For a new point, the SVM calculates based on the support vectors and the kernel, which essentially measures which side of the boundary the point falls on. The sign of this function determines the predicted class, ie. what side the new point falls on and the class that it is assigned with.
+
+4.  Calculate the sensitivity, specificity, and overall error rate (misclassification rate) for your SVM given the test set of 100 data points.
+
+```{r}
+pred <- predict(best_svm, test)
+table(pred)
+```
+
+```{r}
+TP <- sum(pred == 1 & test$Y == 1)
+TN <- sum(pred == 0 & test$Y == 0)
+FP <- sum(pred == 1 & test$Y == 0)
+FN <- sum(pred == 0 & test$Y == 1)
+
+error_rate <- (FP + FN) / nrow(test)
+
+sensitivity <- TP / (TP + FN)
+
+specificity <- TN / (TN + FP)
+
+error_rate
+sensitivity
+specificity
+```
+
+5.  Make a prediction for a new point (x1, x2) = (0.75, 0.75) for each fitted model. Each individual will have a different point for their predictions. Use the same one you used for Lab1
+
+```{r}
+new_point <- data.frame(X1 = 0.75, X2 = 0.75)
+prediction <- predict(best_svm, new_point)
+table(prediction)
+```
+
+6.  Comment on how the prediction differs from your prediction(s) in Lab1 and, given this new prediction, describe what actions (Q3) you recommend given your Q2 results.
+
+At (X1 = 0.75, X2 = 0.75), the SVM predicts Y = 1, this is consistent with the majority of Lab 1 models, KNN being the only model to predict Y=0 in Lab1 while logistic regression, LDA, QDA, and naive Bayes all predicted Y=1. Given all but one method predicted the same, there is reasonable confidence in this prediction. To relate to a real world context, a patient should be referred for further diagnostic testing and evaluation, if Y=1 is a malignant tumor. Since false negatives carry severe consequences, the high sensitivity of the SVM is particularly valuable here. However, given the relatively small test set of 100 points in Lab 3 compared to 1000 in Lab 1, it should be taken into consideration not to over interpret the SVM's performance metrics until tested on a larger dataset.
+
 
 
 ## Team section
@@ -424,8 +559,7 @@ costs <- c(0.1,1)
 gammas <- 10^(-1:1)
 training <- data.frame(X1=X1_train, X2=X2_train, Y=as.factor(Y_train))
 tune.out_radial <- tune(svm, Y ~ ., data=training, kernel="radial",
-  ranges=list(cost=costs, gamma=gammas), tune.control=tune.control(cross=3)
-)
+  ranges=list(cost=costs, gamma=gammas))
 summary(tune.out_radial)
 ```
 
@@ -434,7 +568,7 @@ cat("Best parameters for radial SVM:", tune.out_radial$best.parameters$cost, ","
 cat("Best performance for radial SVM:", tune.out_radial$best.performance, "\n")
 ```
 
-The best cost and gamma parameters were 1 and 0.1, respectively acheiving a misclassification rate of 0.416 under 3-fold cross validation.
+The best cost and gamma parameters were 1 and 0.1, respectively acheiving a misclassification rate of 0.416 under 10-fold cross validation.
 
 ### Description of SVM classification
 
@@ -465,14 +599,14 @@ cat("Specificity:", specificity_rad, "\n")
 cat("Misclassification Rate:", misclassification_rate_rad, "\n")
 ```
 
-The radial SVM acheived approximately sensitivity of 0.347, specificity of 0.706, and misclassification of 0.47 on the test set. This was better than degree 3 polynomial, but not better than the linear SVM.
+The radial SVM acheived approximately sensitivity of 0.347, specificity of 0.706, and misclassification of 0.47 on the test set. Although, the radial SVM did not outperform the linear nor degree 2 SVM, we are deciding to use this model instead for the team competition. We ruled out linear because the training/testing data we do have access to is clearly not linearly separable. And, we believe a radial kernel may outperform polynomial kernel too due to its flexibility and the non-linear nature of the data. Radial had the lowest misclassification rate under cross validation and we are hoping this will translate to better performance on the test set. We could acheive lower misclassification rate by tuning directly on the test set, but this would probably severely overfit and not generalize well in the competition.
 
 ### Team and individual SVM plot
 
 ```{r}
 # bar plot mc rate for each model
-model_names <- c("Linear SVM", "Degree 3 SVM", "Radial SVM (Team)")
-mcrates <- c(0.45, 0.49, 0.47)
+model_names <- c("Linear SVM", "Degree 2 SVM", "Degree 3 SVM", "Radial SVM (Team)")
+mcrates <- c(0.45, 0.45, 0.49, 0.47)
 plot_data <- data.frame(Model = model_names, MisclassificationRate = mcrates)
 ggplot(plot_data, aes(x=Model, y=MisclassificationRate, fill=Model)) +
   geom_bar(stat="identity") +
