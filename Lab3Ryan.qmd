@@ -1,0 +1,191 @@
+---
+title: "Lab3"
+author: "STAT 4610-5610: Spring 2026"
+format: pdf
+editor: visual
+date: 2026-03-23
+---
+
+## Lab3: Support Vector Machines
+
+**Due: 11:59PM Friday, March 27 on Canvas as a knitted pdf file of your team's Quarto document**
+
+1.  You will individually fit a support vector machine, describe what it is doing, and report its misclassification rate, sensitivity, and specificity.
+2.  You will interpret this model and make a prediction in your individual section.
+3.  As a team, you will create a support vector machine (SVM) and compete against other teams for the best test performance. You will also create a team plot that summarizes the performance of the individual SVMs and your team's SVM.
+
+### Instructions for Lab3
+
+In Lab0 (and Lab1), the professor created a generating model for Y variables taking on 0 or 1 values based on the X1 and X2 inputs. You came up with the backstory for what Y, X1, and X2 were and why it was important to use X1 and X2 to predict Y.
+
+In this lab, you will apply support vector machines to continue your analyses for how to best predict Y from X1 and X2. You should continue to use the Q1 qualitative context you developed in Lab0 or Lab1 (or you can develop a new one if you want).
+
+Each individual will fit at least one SVM on a training dataset and then evaluate how well the SVM classifies Y based on a test dataset. Individuals will make a prediction given (x1, x2) and then interpret their prediction and make a recommendation for action. Unlike in Lab0 and Lab1, you will not describe the whole workflow of Q1, Q2, and Q3 for this "project". You will report on the misclassification rate, sensitivity, and specificity for your SVM and make a prediction given (x1, x2). You will comment on how the prediction differs from your prediction in Lab1 and, given this new prediction, describe what actions (Q3) you recommend given your Q2 results.
+
+#### Generating Model
+
+We have a logistic regression generating model. Given $x_1 \in [0,1]$ and $x_2 \in [0,1], Y \sim Ber(p)$, where $p$ is related to $x_1$ and $x_2$ through the logistic link function: $\log(\frac{p}{(1-p)}) = x_1 -2x_2 -2{x_1}^{2} + {x_2}^{2} + 3{x_1}{x_2}$, where $\log$ is the natural log, sometimes written as $\ln$.
+
+The code for this is below.
+
+```{r}
+library(class)
+library(e1071)
+
+suppressPackageStartupMessages(library(tidyverse))
+```
+
+```{r}
+#Generative model
+set.seed(200) #setting a random seed so that we can
+#reproduce everything exactly if we want to
+
+generate_y <- function(x1,x2) { #two input parameters to generate the output y
+  logit <- x1 -2*x2 -2*x1^2 + x2^2 + 3*x1*x2 
+  p <- exp(logit)/(1+exp(logit)) #apply the inverse logit function
+  y <- rbinom(1,1,p) #y becomes a 0 (with prob 1-p) or a 1 with probability p
+}
+```
+
+#### Training dataset
+
+We are going to use our generating model to create a training dataset of 1000 predictors (x1, x2), and then 1000 outcomes. Then we plot all three variables to see what our training data looks like.
+
+```{r}
+# Generate a training dataset with 1000 points
+set.seed(321)
+n = 1000
+X1 <- runif(n,0,1)
+X2 <- runif(n,0,1)
+
+#I'm going to use a for loop to generate 1000 y's
+Y <- rep(0,n) #initializing my Y to be a vector of 0's
+for (i in 1:n) {
+  Y[i] <- generate_y(X1[i],X2[i])
+}
+
+sum(Y) #How many 0's and 1's were predicted? When n is very large
+# about 48% of the Y's should be 1's. 
+
+training <- cbind(X1,X2,Y) #combining all of my variables into a training dataset
+ggplot(data=training, aes(x=X1, y=X2, color=Y)) +
+  geom_point()
+```
+
+How well will various SVMs predict Y given new x1 and x2 values?
+
+#### Test datasets
+
+Each individual will generate a test set of 100 predictors (x1, x2) and outcomes (y) that we will use as our "ground truth". The test dataset should be the same for each team member. Use seed=323.
+
+```{r}
+# Create the training dataset as above using seed=321
+# Create a testing dataset using seed=323
+
+set.seed(323)
+n_test = 100
+
+X1_test <- runif(n_test, 0, 1)
+X2_test <- runif(n_test, 0, 1)
+
+Y_test <- rep(0, n_test)
+
+for (i in 1:n_test) {
+  Y_test[i] <- generate_y(X1_test[i], X2_test[i])
+}
+
+test <- data.frame(X1 = X1_test, X2 = X2_test, Y = Y_test)
+table(test$Y)
+```
+
+#### What individuals need to do (20 pts)
+
+1.  Given the training set (seed=321), fit a ***different*** SVM for each team member. Choose from the options below:
+
+    1.  SVM with degree 2 polynomial
+
+    ```{r}
+    training <- as.data.frame(training)
+    training$Y <- as.factor(training$Y)
+    test$Y <- as.factor(test$Y)
+
+    # Re-tune and refit the SVM
+    svm_model <- tune(svm, 
+                      Y ~ X1 + X2,
+                      data = training,
+                      kernel = "polynomial",
+                      degree = 2,
+                      ranges = list(cost = c(0.1, 1, 10),
+                                    gamma = c(0.5, 1, 2)))
+    ```
+
+2.  Use cross validation to choose your tuning parameters.
+
+```{r}
+best_svm <- svm_model$best.model
+summary(best_svm)
+```
+
+1.  Describe what the SVM is doing, i.e., how it classifies points.
+
+The SVM finds a boundary that separates the two classes of Y by maximizing the margin, which is the distance between the boundary and the closest points from each class. With a degree 2 polynomial kernel, the SVM can create a nonlinear boundary by transforming the data into a higher dimensional space, allowing it to capture curved or more complex relationships than a simple linear model.
+
+The SVM identifies a set of 'support vectors' that lie closest to the decision boundary, and these points end up defining the boundary. Points farther away don’t really affect the model. The cost parameter controls how strictly the model tries to classify every point correctly so a high cost penalizes misclassification more and leads to a smaller boundary while a lower cost allows more points to be misclassified, creating a larger boundary that can help reduce variance on the test set.
+
+For a new point, the SVM calculates based on the support vectors and the kernel, which essentially measures which side of the boundary the point falls on. The sign of this function determines the predicted class, ie. what side the new point falls on and the class that it is assigned with.
+
+1.  Calculate the sensitivity, specificity, and overall error rate (misclassification rate) for your SVM given the test set of 100 data points.
+
+    ```{r}
+    pred <- predict(best_svm, test)
+    table(pred)
+    ```
+
+```{r}
+TP <- sum(pred == 1 & test$Y == 1)
+TN <- sum(pred == 0 & test$Y == 0)
+FP <- sum(pred == 1 & test$Y == 0)
+FN <- sum(pred == 0 & test$Y == 1)
+
+error_rate <- (FP + FN) / nrow(test)
+
+sensitivity <- TP / (TP + FN)
+
+specificity <- TN / (TN + FP)
+
+error_rate
+sensitivity
+specificity
+```
+
+1.  Make a prediction for a new point (x1, x2) = (0.75, 0.75) for each fitted model. Each individual will have a different point for their predictions. Use the same one you used for Lab1
+
+```{r}
+new_point <- data.frame(X1 = 0.75, X2 = 0.75)
+prediction <- predict(best_svm, new_point)
+table(prediction)
+```
+
+1.  Comment on how the prediction differs from your prediction(s) in Lab1 and, given this new prediction, describe what actions (Q3) you recommend given your Q2 results.
+
+At (X1 = 0.75, X2 = 0.75), the SVM predicts Y = 1, this is consistent with the majority of Lab 1 models, KNN being the only model to predict Y=0 in Lab1 while logistic regression, LDA, QDA, and naive Bayes all predicted Y=1. Given all but one method predicted the same, there is reasonable confidence in this prediction. To relate to a real world context, a patient should be referred for further diagnostic testing and evaluation, if Y=1 is a malignant tumor. Since false negatives carry severe consequences, the high sensitivity of the SVM is particularly valuable here. However, given the relatively small test set of 100 points in Lab 3 compared to 1000 in Lab 1, it should be taken into consideration not to over interpret the SVM's performance metrics until tested on a larger dataset.
+
+#### What teams need to do
+
+1.  Create a new team SVM that predicts the test set better than any individual SVM.
+
+2.  Describe what the SVM is doing, i.e., how it classifies points.
+
+3.  Make a plot that summarizes the performance of the individual SVMs and your team's SVM.
+
+4.  Provide R code that can easily be run in class to test the performance of your team's SVM (on a new test set). The code must accept a test dataset of 100 X and y values and output the misclassification rate, sensitivity, and specificity of the SVM. More specifically, write the code so that the only thing that needs to change is the random seed. Add some aspect of your team name to your code so we can distinguish between different teams' functions. Email your .qmd file to the professor. (Upload a pdf to Canvas.) The team with the best classifier on the test set the professor will generate in class (using a different seed) will get 10 bonus points. Second place will get 5 bonus points. Third place will get 4 bonus points. Fourth place will get 3 bonus points. Fifth place will get 2 bonus points. Sixth place will get 1 bonus point. Only teams whose code runs (in class) on the first try will get any bonus points.
+
+5.  In the team section of this lab, write a paragraph about individual contributions. Each individual must comment on their contributions to the lab. Only individuals who contribute to the team section will get points for the team section.
+
+#### **Some intended outcomes from this assignment:**
+
+-   You will individually get practice fitting a SVM
+-   You will compare the predictive performance of multiple SVMs and previously used classification methods
+-   You will make predictions based on your SVM
+-   You will compare models visually
+-   You will gain experience collaborating with your teammates on an applied problem
