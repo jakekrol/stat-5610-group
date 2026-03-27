@@ -2,7 +2,6 @@
 title: "Lab3 Team ROCStars"
 author: "Emery Berry, Ryan Morreale, Jacob Krol"
 format: pdf
-editor: visual
 date: 2026-03-27
 ---
 
@@ -76,7 +75,6 @@ How well will various SVMs predict Y given new x1 and x2 values?
 
 Each individual will generate a test set of 100 predictors (x1, x2) and outcomes (y) that we will use as our "ground truth". The test dataset should be the same for each team member. Use seed=323.
 
-
 #### What individuals need to do (20 pts)
 
 1.  Given the training set (seed=321), fit a ***different*** SVM for each team member. Choose from the options below:
@@ -139,11 +137,12 @@ ggplot(data=test, aes(x=X1_test, y=X2_test, color=Y_test)) +
 
 #### Outline
 
-- I will fit an SVM with degree 3 polynomial.
-- I will use 3-fold cross validation to search for the cost and gamma parameters.
-  - 3-fold is faster than 10-fold, but may overestimate test error. 
+-   I will fit an SVM with degree 3 polynomial.
+-   I will use 3-fold cross validation to search for the cost and gamma parameters.
+    -   3-fold is faster than 10-fold, but may overestimate test error.
 
 Dependencies
+
 ```{r}
 library(e1071)
 ```
@@ -205,11 +204,11 @@ $$
 f(x) = \sum_{i\in S} \alpha_i y_i (\gamma x_i^Tx)^3 + \beta_0
 $$
 
-- $S$ is the set of support vectors
-- $\alpha_i$ is a learned weight for a specific support vector
-- $y_i$ is the training label for the $i$th point
-- $\gamma$ is a hyperparameter scaling the impact of similarity between a support vector and the input
-- $\beta_0$ is the bias
+-   $S$ is the set of support vectors
+-   $\alpha_i$ is a learned weight for a specific support vector
+-   $y_i$ is the training label for the $i$th point
+-   $\gamma$ is a hyperparameter scaling the impact of similarity between a support vector and the input
+-   $\beta_0$ is the bias
 
 A final prediction is done by computing f(x) and taking the sign.
 
@@ -229,7 +228,6 @@ The model predicted all test points for the negative class yeilding a sensitivit
 
 #### Prediction of new point
 
-
 ```{r}
 new_point <- data.frame(X1=0.75, X2=0.25)
 pred_new_point_deg3 <- predict(svm_deg3_final, newdata=new_point)
@@ -240,13 +238,180 @@ Degree 3 polynomial SVM predicts a class of 1 for the point (0.75, 0.25).
 
 #### Compare with Lab1 predictions and recommendation
 
-The problem context of lab 1 was the problem of whether or not to diagnose a patient given the doctor's belief (e.g., X1) and a test result (e.g., X2). 
+The problem context of lab 1 was the problem of whether or not to diagnose a patient given the doctor's belief (e.g., X1) and a test result (e.g., X2).
 
 In lab 1, I made a prediction for the point (0.75, 0.25) using logistic regression, LDA, QDA, naive bayes, and logistic regression, and all models, except QDA, predicted a class of 1 for this point. Here, the degree 3 polynomial SVM also predicts a class of 1 for the point (0.75, 0.25).
 
 Similar to lab 1, I would not recommend using this model for disease diagnosis. The misclassification error on the test dataset was no better than a majority classifier where all model predictions were for the negative class (Q3)
 
+Cleanup
+```{r}
+rm(list=ls())
+```
+
+#### Emery Individual Section
+
+```{r}
+generate_y <- function(x1,x2) { #two input parameters to generate the output y
+  logit <- x1 -2*x2 -2*x1^2 + x2^2 + 3*x1*x2 
+  p <- exp(logit)/(1+exp(logit)) #apply the inverse logit function
+  y <- rbinom(1,1,p) #y becomes a 0 (with prob 1-p) or a 1 with probability p
+}
+# Generate a training dataset with 1000 points
+set.seed(321)
+n = 1000
+X1 <- runif(n,0,1)
+X2 <- runif(n,0,1)
+
+#I'm going to use a for loop to generate 1000 y's
+Y <- rep(0,n) #initializing my Y to be a vector of 0's
+for (i in 1:n) {
+  Y[i] <- generate_y(X1[i],X2[i])
+}
+
+sum(Y) #How many 0's and 1's were predicted? When n is very large
+# about 48% of the Y's should be 1's. 
+
+training <- as.data.frame(cbind(X1, X2, Y))
+training$Y <- as.factor(training$Y) #combining all of my variables into a training dataset
+ggplot(data=training, aes(x=X1, y=X2, color=Y)) +
+  geom_point()
+```
+
+```{r}
+# Create the training dataset as above using seed=321
+# Create a testing dataset using seed=323
+
+set.seed(323)
+n = 100
+
+X1_test <- runif(n,0,1)
+X2_test <- runif(n,0,1)
+
+Y_test <- rep(0,n) 
+for (i in 1:n) {
+  Y_test[i] <- generate_y(X1_test[i],X2_test[i])
+}
+
+test <- as.data.frame(cbind(X1_test,X2_test,Y_test))
+
+table(test$Y_test)
+```
+
+```{r}
+library(e1071)
+```
+
+#### Fit Linear SVM on training data using CV (Using tune() to perform 10-fold CV)
+
+```{r}
+
+tune_linear <- tune(svm, Y ~ X1 + X2,
+                    data = training,
+                    kernel = "linear",
+                    ranges = list(cost = c(0.01, 0.1, 1, 10, 100)))
+summary(tune_linear)
+best_linear <- tune_linear$best.model
+
+
+
+```
+
+A linear SVM classifies points by finding the optimal hyperplane (in this case a line since we have only two predictors) that best separates the two classes (Y = 0 and Y = 1). "Optimal" means the hyperplane that maximizes the margin which is the distance between the hyperplane and the closest data points from each class. These points are known as support vectors. Only these support vectors influence the position of the decision boundary, the remaining training points are irrelevant to it.
+
+The cost parameter C, tuned via 10-fold cross-validation, controls the trade-off between maximizing the margin and minimizing misclassification. A larger C allows for more misclassifications in exchange for a wider margin, while a smaller C penalizes misclassifications heavily, resulting in a narrower margin that tries to correctly classify more training points.
+
+Once trained, the model classifies a new point by determining which side of the hyperplane it falls on. Points on one side are predicted Y = 0, and points on the other side are predicted Y = 1.
+
+#### Predict on The Test Set
+
+```{r}
+test <- as.data.frame(cbind(X1_test, X2_test, Y_test))
+names(test) <- c("X1", "X2", "Y")
+test$Y <- as.factor(test$Y)
+
+pred_linear <- predict(best_linear, newdata = test)
+```
+
+#### Confusion Matrix for Sensitivity and Specificity
+
+```{r}
+test$Y <- factor(test$Y, levels = c("0", "1"))
+pred_linear <- factor(pred_linear, levels = c("0", "1"))
+
+conf <- table(Predicted = pred_linear, Actual = test$Y)
+conf
+
+sensitivity <- conf[2,2] / sum(conf[,2])
+specificity <- conf[1,1] / sum(conf[,1])
+error_rate  <- mean(pred_linear != test$Y)
+
+sensitivity
+specificity
+error_rate
+```
+
+#### New Predicition
+
+```{r}
+new_point <- data.frame(X1 = 0.25, X2 = 0.25)
+
+prediction <- predict(best_linear, newdata = new_point)
+actual <- generate_y(0.25, 0.25)
+
+cat("For the new point (X1 = 0.25, X2 = 0.25):\n",
+    "Predicted Y =", as.character(prediction), "\n",
+    "Actual Y    =", actual, "\n",
+    "Correct?    =", ifelse(as.character(prediction) == as.character(actual), "Yes", "No"))
+```
+
+#### Lab 1 Comparison and Q3 Recommendation
+
+The linear SVM predicted Y = 0 for the new point (X1 = 0.25, X2 = 0.25), however the true value was Y = 1, meaning the model misclassified this point. This is consistent with Lab 1, where logistic regression, LDA, QDA, and Naive Bayes all also predicted Y = 0. Looking back, we can actually see that the linear SVM only predicts 0, likely because there is too much overlap in the data, and a Linear SVM simply cannot do a good job separating the classes. Notably, KNN with optimal K was the only method across both labs to correctly classify this point, likely because KNN classifies based on the local neighborhood of nearest neighbors rather than a global decision boundary.
+
+In Lab 1, I proposed possible context for this dataset: X1 represents the average summer temperature of a region and X2 represents the average summer rainfall. The goal was to predict whether a region experiences significant wildfire damage (Y = 1) or not (Y = 0). reflecting on this goal in Q3, the false negative and constant prediction of 0 is concerning for wildfire damage prediction. It means many regions that may truly need wildfire assistance are being overlooked. I recommend trying more flexible, locally sensitive classification approaches over a linear boundary when predicting wildfire risk. More flexible SVM approaches, such as polynomial or radial basis function (RBF) kernel SVMs, may better capture the non-linear relationship between average summer temperature, rainfall, and wildfire damage. Using higher degree SVMs could improve classification accuracy, ultimately reducing the risk of missing regions that are truly at high risk for significant wildfire damage.
+
+
 ## Team section
+
+```{r}
+# Generate a training dataset with 1000 points
+set.seed(321)
+n = 1000
+X1_train <- runif(n,0,1)
+X2_train <- runif(n,0,1)
+
+#I'm going to use a for loop to generate 1000 y's
+Y_train <- rep(0,n) #initializing my Y to be a vector of 0's
+for (i in 1:n) {
+  Y_train[i] <- generate_y(X1_train[i],X2_train[i])
+}
+
+sum(Y_train)
+
+training <- cbind(X1_train,X2_train,Y_train)
+ggplot(data=training, aes(x=X1_train, y=X2_train, color=Y_train)) +
+  geom_point()
+```
+
+```{r}
+set.seed(323)
+n = 100
+X1_test <- runif(n,0,1)
+X2_test <- runif(n,0,1)
+
+Y_test <- rep(0,n)
+for (i in 1:n) {
+  Y_test[i] <- generate_y(X1_test[i],X2_test[i])
+}
+test <- cbind(X1_test,X2_test,Y_test)
+cat("# of 1s", sum(Y_test), "\n")
+cat("# of 0s", sum(1-Y_test), "\n")
+ggplot(data=test, aes(x=X1_test, y=X2_test, color=Y_test)) +
+  geom_point() +
+  ggtitle("Test data")
+```
+
 
 ### Model selection
 
@@ -279,11 +444,11 @@ $$
 f(x) = \sum_{i\in S} \alpha_i y_i \exp(-\gamma ||x_i - x||^2) + \beta_0
 $$
 
-- $S$ is the set of support vectors
-- $\alpha_i$ is a learned weight for a specific support vector
-- $y_i$ is the training label for the $i$th point
-- $\gamma$ is a hyperparameter scaling the impact of similarity between a support vector and the input
-- $\beta_0$ is the bias
+-   $S$ is the set of support vectors
+-   $\alpha_i$ is a learned weight for a specific support vector
+-   $y_i$ is the training label for the $i$th point
+-   $\gamma$ is a hyperparameter scaling the impact of similarity between a support vector and the input
+-   $\beta_0$ is the bias
 
 A final prediction is done by computing f(x) and taking the sign.
 
@@ -300,31 +465,39 @@ cat("Specificity:", specificity_rad, "\n")
 cat("Misclassification Rate:", misclassification_rate_rad, "\n")
 ```
 
-The radial SVM acheived approximately sensitivity of 0.347, specificity of 0.706, and misclassification of 0.47 on the test set, which is better than any of the individual SVMs.
+The radial SVM acheived approximately sensitivity of 0.347, specificity of 0.706, and misclassification of 0.47 on the test set. This was better than degree 3 polynomial, but not better than the linear SVM.
+
+### Team and individual SVM plot
+
+```{r}
+# bar plot mc rate for each model
+model_names <- c("Linear SVM", "Degree 3 SVM", "Radial SVM (Team)")
+mcrates <- c(0.45, 0.49, 0.47)
+plot_data <- data.frame(Model = model_names, MisclassificationRate = mcrates)
+ggplot(plot_data, aes(x=Model, y=MisclassificationRate, fill=Model)) +
+  geom_bar(stat="identity") +
+  ggtitle("Test Misclassification Rate for Individual and Team SVMs") +
+  ylab("Misclassification Rate") +
+  theme_minimal()
+```
 
 ### Individual contributions
 
 #### Emery
 
-- Suggested using radial SVM for team model
-- Contributed to description of SVM classification
-- Reviewed and edited final lab report
+-   Suggested using radial SVM for team model
+-   Contributed to description of SVM classification
+-   Reviewed and edited final lab report
 
 #### Ryan
 
-- Suggested using radial SVM for team model
-- Contributed to description of SVM classification
-- Reviewed and edited final lab report
+-   Suggested using radial SVM for team model
+-   Contributed to description of SVM classification
+-   Reviewed and edited final lab report
 
 #### Jake
 
-- Tuned radial SVM and evaluated on test dataset
-- Wrote final description of SVM classification
-- Wrote final R script for team SVM
-- Plotted final team SVM performance compared to individual SVMs
-
-
-
-
-
-
+-   Tuned radial SVM and evaluated on test dataset
+-   Wrote final description of SVM classification
+-   Wrote final R script for team SVM
+-   Plotted final team SVM performance compared to individual SVMs
