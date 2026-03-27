@@ -568,7 +568,7 @@ cat("Best parameters for radial SVM:", tune.out_radial$best.parameters$cost, ","
 cat("Best performance for radial SVM:", tune.out_radial$best.performance, "\n")
 ```
 
-The best cost and gamma parameters were 1 and 0.1, respectively acheiving a misclassification rate of 0.416 under 10-fold cross validation.
+The best cost and gamma parameters were 0.1 and 1, respectively acheiving a misclassification rate of 0.417 under 10-fold cross validation.
 
 ### Description of SVM classification
 
