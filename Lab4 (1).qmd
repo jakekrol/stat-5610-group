@@ -1,0 +1,181 @@
+---
+title: "Lab4: Clustering (and PCA)"
+author: "STAT 4610/5610"
+format: pdf
+editor: visual
+date: 2026-04-14
+---
+
+#### Emery Individual Section
+
+```{r}
+library(tidyverse)
+Attitude_clean <- read.csv("Attitude.clean.csv") 
+X <- dplyr::select(Attitude_clean, -Group)
+X_scaled <- scale(X)
+
+group_labels <- Attitude_clean$Group
+```
+
+#### Part 1. K-means Clustering
+
+```{r}
+set.seed(123)
+km.out <- kmeans(X_scaled, centers = 3, nstart = 20)
+
+# Compare clusters to known groups
+table(Cluster = km.out$cluster, Group = group_labels)
+```
+
+#### Part 2. Comparison
+
+```{r}
+# Compare clusters to known groups
+table(Cluster = km.out$cluster, Group = group_labels)
+```
+
+Using K-means clustering with K=3 and 20 random starts, the three clusters correspond somewhat with the 6 groups . Cluster 2 is the most distinct, containing only Indonesian respondents (5 IndoPost24, 15 IndoPre25, and 9 IndoProf24) and no American students. This suggests Indonesian respondents share a meaningfully different attitude profile compared to their American counterparts. Cluster 1 is the largest and most mixed, capturing some of every group, while Cluster 3 pulls in mostly American students (13 SLSp26 and 12 StatCollab) alongside some Indonesian students. Overall, K=3 reveals a meaningful distinction between Indonesian and American respondents, but a higher K would likely be needed to further differentiate within those two populations.
+
+#### Part 3. Clustering Attitudes
+
+```{r}
+# Transpose so attitudes are the observations
+X_t <- t(X_scaled)
+
+set.seed(123)
+km.att <- kmeans(X_t, centers = 3, nstart = 20)
+
+# See which attitudes fall in which cluster
+data.frame(Attitude = rownames(X_t),
+           Cluster  = km.att$cluster) |>
+  arrange(Cluster) |>
+  split(~Cluster) |>
+  print()
+```
+
+For every attitude, its freq and fav versions land in the same cluster. This suggests that how often respondents reported having an attitude is closely tied to how they believed it would impact collaboration. Cluster 1 contains attitudes A1, A3, A4, A5, A11, A15, A18, A19, and A20; Cluster 2 contains A2, A8, A9, A10, A22, and A24; and Cluster 3 contains A6, A7, A12-A14, A16, A17, and A21-A25. Without the actual attitude descriptions it is difficult to interpret what substantively distinguishes the three clusters, but the consistent freq/fav pairing suggests a strong relationship between frequency and perceived impact across all attitudes.
+
+#### Part 4. Hierarchical Clustering - Average Linkage
+
+```{r}
+# Plot both dendrograms to visually choose K
+# Euclidean distance
+hc.avg.euc <- hclust(dist(X_scaled, method = "euclidean"), method = "average")
+
+# Manhattan distance
+hc.avg.man <- hclust(dist(X_scaled, method = "manhattan"), method = "average")
+
+
+plot(hc.avg.euc, main = "Average Linkage, Euclidean", xlab = "", sub = "", labels = FALSE)
+plot(hc.avg.man, main = "Average Linkage, Manhattan", xlab = "", sub = "", labels = FALSE)
+```
+
+```{r}
+best.k <- 3
+
+cut.euc <- cutree(hc.avg.euc, k = best.k)
+cut.man <- cutree(hc.avg.man, k = best.k)
+
+table(Euclidean = cut.euc, Group = group_labels)
+table(Manhattan = cut.man, Group = group_labels)
+```
+
+Both Euclidean and Manhattan distance gave identical results under average linkage, so Euclidean was kept as the default. K=3 was chosen to match the K-means analysis and allow for direct comparison, along wih the fact that it had one of the largest height gaos on the dendrogram. However, regardless of K chosen, average linkage placed nearly all respondents into one cluster with only a single outlier separated out. This is a known issue with average linkage. Complete linkage was tested and confirmed to give much more balanced clusters, so the poor result here is due to the linkage method rather than the data or distance measure.
+
+#### Part 5. Best Dendrogram
+
+```{r}
+plot(hc.avg.euc,
+     main = "Hierarchical Clustering of Respondents (Average, Euclidean)",
+     xlab = "", sub = "",
+     labels = FALSE)
+
+rect.hclust(hc.avg.euc, k = 3, border = c("red", "blue", "green"))
+```
+
+The dendrogram confirms what the table showed. Average linkage with K=3 places nearly all respondents into a single large cluster, with two individual IndoProf24 respondents split off as their own clusters. This does not correspond meaningfully to the six known groups at all. Compared to K-means, which at least identified a distinct Indonesian cluster, hierarchical clustering with average linkage fails to recover any meaningful group structure in this data. This reinforces that average linkage is a poor choice for this dataset, because average linkage tends to snowball in high-dimensional data, absorbing points one by one into one giant cluster rather than forming distinct groups.
+
+#### Part 6. Cluster Attitudes
+
+```{r}
+# Correlation-based distance
+att.dist.corr <- as.dist(1 - cor(t(X_t)))
+hc.att.comp.corr <- hclust(att.dist.corr, method = "complete")
+
+# Euclidean for comparison
+hc.att.comp.euc <- hclust(dist(X_t, method = "euclidean"), method = "complete")
+
+# Cut at K=3
+att.cut.corr <- cutree(hc.att.comp.corr, k = 3)
+att.cut.euc  <- cutree(hc.att.comp.euc,  k = 3)
+
+# Correlation distance
+data.frame(Attitude = rownames(X_t), Cluster = att.cut.corr) |>
+  arrange(Cluster) |>
+  split(~Cluster) |>
+  print()
+
+# Count of attitudes per cluster
+table(Cluster = att.cut.corr)
+
+```
+
+Correlation distance was used because we care about which attitudes move together across respondents, not their absolute values. Complete linkage was used instead of average linkage, which was shown earlier to chain badly on this dataset. The resulting three clusters are reasonably balanced with 18, 12, and 20 attitudes respectively. As with K-means, every attitude's freq and fav versions land in the same cluster, reinforcing that frequency and perceived impact are closely related.
+
+#### Part 7. Best Dendrogram
+
+```{r}
+plot(hc.att.comp.corr,
+     main = "Hierarchical Clustering of Attitudes (Complete, Correlation)",
+     xlab = "", sub = "")
+
+rect.hclust(hc.att.comp.corr, k = 3, border = c("red", "blue", "green"))
+```
+
+The dendrogram shows three decently balanced clusters with clear separation, suggesting complete linkage with correlation distance was a good fit for this data. The results closely mirror the K-means attitude clusters from Part 3 with the same attitudes tending to group together across both methods. This is strong evidence that these clusters reflect genuine structure in the data rather than an artifact of the algorithm chosen. As with K-means, every attitude's freq and fav versions land in the same cluster, reinforcing that frequency and perceived impact are consistently tied together regardless of the clustering method used.
+
+### Team Section Part 2: PCA
+
+```{r}
+# Run PCA on the attitudes (transposed matrix)
+pca.att <- prcomp(t(X_scaled), scale. = FALSE)
+
+# See how much variance each PC explains
+summary(pca.att)
+
+# Plot the attitudes on PC1 vs PC2, labeled by attitude name
+biplot(pca.att, scale = 0)
+
+```
+
+```{r}
+# Scree plot
+pve <- summary(pca.att)$importance[2,]  # proportion of variance explained
+plot(pve, type = "b", pch = 19,
+     xlab = "Principal Component",
+     ylab = "Proportion of Variance Explained",
+     main = "Scree Plot - PCA of Attitudes")
+
+# Cumulative variance explained
+plot(cumsum(pve), type = "b", pch = 19,
+     xlab = "Principal Component",
+     ylab = "Cumulative Proportion of Variance Explained",
+     main = "Cumulative Variance Explained - PCA of Attitudes")
+
+# Color the PCA plot by clustering results to directly compare
+plot(pca.att$x[, 1:2],
+     col = att.cut.corr,
+     pch = 19,
+     xlab = "PC1", ylab = "PC2",
+     main = "PCA of Attitudes Colored by Hierarchical Clusters")
+text(pca.att$x[, 1:2],
+     labels = rownames(pca.att$x),
+     col = att.cut.corr,
+     cex = 0.7, pos = 3)
+```
+
+The scree plot shows PC1 explains about 19% of the variance, and the cumulative variance plot shows you need over 20 components to explain 80% of the variance. This means the attitude data is spread across many dimensions and PCA alone does not give a simple, interpretable summary.
+
+That being said, when the PCA plot is colored by the hierarchical cluster assignments, the three clusters separate cleanly in PC space with black on the left, pink in the middle/bottom, and green on the right. This is a good sign that the clusters reflect real structures in the data.
+
+Overall, clustering is more interpretable than PCA here. The clusters give clear groupings of attitudes that are consistent across both K-means and hierarchical methods, while PCA requires too many components to be summarized easily. The PCA plot is most useful as a visual check that the clusters are genuinely distinct rather than as a standalone tool.
