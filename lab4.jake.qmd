@@ -1,0 +1,196 @@
+---
+title: "Lab 4 STAT 5610"
+author: "Jacob Krol"
+date: "2026-04-17"
+output: pdf
+---
+
+## Individual section Jake
+
+### Data
+
+```{r}
+library(tidyverse)
+path_data <- "/data/jake/stat-5610-statistical_learning/Attitude.clean.csv"
+df <- read_csv(path_data)
+# get unique groups
+unique(df$Group)
+X <- df |> select(-Group)
+```
+
+data structure
+
+- "freq": is frequency of attitude 
+- "fav": how favorable attitude is 
+- groups are 
+	- statcollab members
+	- statistical learning members
+	- indonesian professors
+	- indonesian students pre and post class
+
+### K-means clustering
+
+1. I fit kmeans with K=2 clusters and 20 random starts.
+
+```{r}
+set.seed(0)
+k <- 2
+km_model <- kmeans(X, centers = k, nstart=20)
+```
+
+2. Interpret clusters relative to the groups
+
+
+```{r}
+cluster_counts <- table(km_model$cluster)
+barplot(cluster_counts, main="Cluster Sizes", xlab="Cluster", ylab="Count", col=c("blue", "orange"))
+print(cluster_counts)
+```
+
+Cluster 2 has 133 observations which is larger than cluster 1 with 57 observations.
+
+```{r}
+df$Cluster <- as.factor(km_model$cluster)
+ggplot(df, aes(x=Group, fill=Cluster)) +
+  geom_bar(position="dodge") +
+  labs(title="K-means Clusters by Group", x="Group", y="Count") +
+  theme_minimal()
+
+```
+
+Cluster 2 is spread across all groups while cluster 1 is mostly indonesian students or professors, regardless of pre or post class. The only group purely in one cluster is StatLearning Spring 2025, which is contained solely in cluster 2.
+
+3. Clustering tranpose of data
+
+Here, attitudes are observations while surveyees are features.
+
+```{r}
+X_t <- t(X)
+km_model_t <- kmeans(X_t, centers = k, nstart=20)
+```
+
+```{r}
+cluster_counts_t <- table(km_model_t$cluster)
+barplot(cluster_counts_t, main="Cluster Sizes (Transposed)", xlab="Cluster",
+		ylab="Count", col=c("blue", "orange"))
+print(cluster_counts_t)
+```
+
+The cluster size ratio is 20:30 for cluster 1 and 2 respectively.
+
+The distribution of average scores in each cluster is as follows
+
+```{r}
+attitude_clusters <- cbind(X_t, Cluster=km_model_t$cluster) |> as_tibble()
+# get average score in cluster
+attitude_clusters_summary <- attitude_clusters |> group_by(Cluster) |> summarise_all(mean)
+attitude_clusters_summary
+
+attitude_clusters_summary_long <- attitude_clusters_summary |> pivot_longer(cols=-Cluster, names_to="Attitude", values_to="Average_Score")
+c1_scores <- attitude_clusters_summary_long |> filter(Cluster == 1)
+c2_scores <- attitude_clusters_summary_long |> filter(Cluster == 2)
+```
+
+```{r}
+par(mfrow=c(1, 2))
+hist(c1_scores$Average_Score, main="Cluster 1 Average Scores", xlab="Average Score", col="blue", xlim=c(1,5))
+hist(c2_scores$Average_Score, main="Cluster 2 Average Scores", xlab="Average Score", col="orange", xlim=c(1,5))
+par(mfrow=c(1, 1))
+```
+
+Clearly, attitudes with lower average scores are in cluster 1 while attitudes with higher average scores are in cluster 2.
+
+### Hierarhchical clustering
+
+4 and 5. I used centroid linkage for hierarchical clustering.
+
+```{r}
+dist_matrix_euc <- dist(X)
+dist_matrix_man <- dist(X, method="manhattan")
+hc_model_euc <- hclust(dist_matrix_euc, method="centroid")
+hc_model_man <- hclust(dist_matrix_man, method="centroid")
+```
+
+```{r}
+plot(hc_model_euc, main="Hierarchical Clustering Dendrogram (Euclidean)", xlab="", sub="")
+```
+
+```{r}
+plot(hc_model_man, main="Hierarchical Clustering Dendrogram (Manhattan)", xlab="", sub="")
+```
+
+For both Euclidean and Manhattan distance, the dendrograms are very similar. Most observations (survey takers) are "close" in terms of their attitude distances. However, there are a few outliers shown by the few large height fusions in the top left and bottom right of the dendrogram. Since the euclident distance tree is visually less complex, I will continue with this. And, I will select 3-clusters, becuase it looks like two cut points are reasonable: 1) at about 10 height and 2) at about 35 height. I am continuing with Euclidean distance because the dendrogram has less variation in the heights of fusions, which makes it easier to select a cut point.
+
+```{r}
+memb <- cutree(hc_model_euc, k=3)
+
+df$HCA_Cluster <- as.factor(memb)
+
+cluster_counts_hca <- table(memb)
+barplot(cluster_counts_hca, main="HCA Cluster Sizes (K=3)", xlab="Cluster", ylab="Count", col=c("blue", "orange", "green"))
+print(cluster_counts_hca)
+
+ggplot(df, aes(x=Group, fill=HCA_Cluster)) +
+  geom_bar(position="dodge") +
+  labs(title="HCA Clusters by Group (K=3)", x="Group", y="Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+cluster_counts_hca
+
+```
+
+As expected from the dendrogram, a single cluster contains most of the observations (188), and only 2 points remain in the other two clusters. Overall, cluster 1 is distributed across all groups while cluster 2 only has a single individual from pre-statistical learning course 2025 and cluster 3 only has a single individual from Indonesian professors.
+
+6. HCA using the attitudes and complete linkage
+
+```{r}
+dist_matrix_t_euc <- dist(X_t)
+hc_model_t_euc <- hclust(dist_matrix_t_euc, method="complete")
+```
+
+I chose Euclidean distance since the values here are integers from 1 to 5or6, and although these values are not continuous, the magnitude of differences between them is meaningful, and I do not think this would be captured purely by a correlation distance.
+
+7. Ploting the attitudes HCA dendrogram
+
+```{r}
+plot(hc_model_t_euc, main="Hierarchical Clustering Dendrogram (Transposed, Euclidean)", xlab="", sub="")
+```
+
+Here, a good cut point a single cut at about 40 height to yeild would be two clusters. This matches up with the k-means clustering of the attitudes
+
+Plot the distibution of average scores in each cluster
+```{r}
+attitude_clusters_hca <- cbind(X_t, Cluster=as.factor(cutree(hc_model_t_euc, k=2))) |> as_tibble()
+attitude_clusters_hca_summary <- attitude_clusters_hca |> group_by(Cluster) |> summarise_all(mean)
+attitude_clusters_hca_summary_long <- attitude_clusters_hca_summary |> pivot_longer(cols=-Cluster, names_to="Attitude", values_to="Average_Score")
+c1_scores_hca <- attitude_clusters_hca_summary_long |> filter(Cluster == 1)
+c2_scores_hca <- attitude_clusters_hca_summary_long |> filter(Cluster == 2)
+```
+
+```{r}
+par(mfrow=c(1, 2))
+hist(c1_scores_hca$Average_Score, main="HCA Cluster 1 Average Scores", xlab="Average Score", col="blue", xlim=c(1,5))
+hist(c2_scores_hca$Average_Score, main="HCA Cluster 2 Average Scores", xlab="Average Score", col="orange", xlim=c(1,5))
+par(mfrow=c(1, 1))
+```
+
+Again, similar to K-means one cluster contains attitudes with lower average scores while the other cluster contains attitudes with higher average scores. 
+
+## Team section 
+
+1. Reviewing all individual results
+
+For clustering observations, Jake used K=2 for K-means which clustered Indonesian surveyees nearly all into one cluster while the other cluster was well-mixed across all groups. Jake's HCA using Euclidean distance and centroid linkage led him to select k=3 clusters, yet most surveyees were just in one cluster.
+
+Emery used K=3 for K-means. One cluster had solely Indonesian students, another cluster had a majority of American students, and the last cluster had a mix of all groups. For HCA, Emery used average linkage with Euclidean distance and also selected K=3 clusters. The result was very similar to Jake's HCA, with most observations falling into one cluster.
+
+Ryan used K=6 for K-means, yet the clusters did not correspond well to the 6 groups with quite a lot of mixing across clusters and groups. For HCA Ryan used complete linkage with Euclidean distance and selected K=6 clusters for direct comparison with groups and K-means. Euclidean distance gave a more balanced tree structure while Manhattan led to one large cluster. Ryan found that some of the smaller clusters were more concentrated with the Indonesian professor group, but overall there was little association between clusters and groups.
+
+Across all individual sections, K-means performed best, in our judgment, K=3 clusters since a single cluster was purely composed of Indonesian surveyees, and this never occured with K=2 nor K=6. K=2 had one cluster with mostly Indonesian surveyees but also had a mix of American students. For hierarchical clustering, complete linkage HCA with Euclidean distance seemed was better than centroid and average linkage. Centroid and average linkage both led to one large cluster and two very small clusters, while complete linkage had a more balanced distribution of cluster sizes. For the distance metric choice, Euclidean distance led to less variation in the heights of fusions in the dendrogram, which made it easier to select a cut point.
+
+Overall, we argue K-means with K=3 clusters best represented the data because a single cluster was produced that was pure in terms of surveyees' geographic location: cluster 2 was solely Indonesian survyees. In general, we did not find any clustering approach that mimicked all 6 groups very well.
+
+5. Individual contributions
+
+- Jake analyzed and wrote the review of all individual results.
+
