@@ -1,0 +1,270 @@
+---
+title: "Final Project - Emery Individual Section"
+author: "Emery Berry"
+format: pdf
+editor: visual
+---
+
+# How do quality-of-life detractors (crime rate, air pollution, and lower socioeconomic status) impact median house prices in Boston?
+
+### Q1 - Context and Scope of the Problem
+
+The goal of this project is to discover how a specific category of variables will affect median house prices and to use these variables for prediction. The data set used contains 506 observations across 13 predictors capturing various neighborhood characteristics throughout Boston, MA. The response variable of interest is `medv`, the median home value measured in thousands of dollars.
+
+This analysis focuses specifically on **socioeconomic and environmental risk factors**, which are variables that reflect adverse neighborhood conditions rather than physical housing attributes. The three predictors of interest are:
+
+-   `lstat` — the percentage of lower status population in the neighborhood, indicating socioeconomic disadvantage
+
+-   `crim` — the per capita crime rate by town, reflecting public safety conditions
+
+-   `nox` — the concentration of nitrogen oxides in the air (parts per 10 million), serving as a measure of environmental quality and pollution
+
+Each of these variables is expected to have a negative relationship with median home value. It is expected that as crime rises, air quality worsens, or socioeconomic disadvantage increases, home prices tend to fall. However, the nature of these relationships may not be strictly linear. For example, there may be a threshold where home prices drop sharply only after crime or pollution crosses a certain level. Understanding the nature of these relationships, not just their direction, is a key motivation for this analysis. Ultimately, this work aims to answer: **How do socioeconomic and environmental risk factors influence median house prices in Boston, and how well can these variables alone predict home value?**
+
+**Why This Analysis Matters** This analysis is relevant across multiple domains. For policymakers and urban planners, quantifying how crime and pollution suppress home values provides evidence to justify targeted investment in underserved neighborhoods. For real estate professionals, these variables can serve as diagnostic tools for more accurate pricing and risk assessment. More broadly, the variables examined here (crime, pollution, and socioeconomic status) disproportionately affect low-income and historically marginalized communities, meaning their impact on home prices reflects deeper structural inequalities baked into the housing market. Understanding these relationships is a step toward making those inequalities visible and, ideally, actionable.
+
+### Q2 - Methods and Results
+
+To answer the research question, three statistical learning models were fit to the Boston dataset using `lstat`, `crim`, and `nox` as predictors of median house price. Each model was tuned using cross-validation and compared based on predictive performance. The three models chosen were a Generalized Additive Model (GAM), Random Forest, and Principal Components Regression (PCR). GAM was chosen because it can capture flexible, nonlinear relationships between each predictor and the response. This makes sense in the context of the problem since the effects of crime, pollution, and socioeconomic status on home prices probably aren't strictly linear. Random Forest was included because it handles complex interactions between predictors well without requiring any assumptions about the functional form, and its variable importance output gives us a clearer picture of which risk factors matter most. PCR rounds out the analysis by reducing the three predictors into uncorrelated components, which helps us understand how much of the variation in home prices can be explained by the combined structure of these variables. Together, the three models take quite different approaches to the same problem, which should give us a more complete picture of how these neighborhood characteristics relate to median home value.
+
+#### Setup
+
+```{r}
+library(ISLR2)
+data(Boston)
+
+boston_emery <- Boston[, c("crim", "nox", "lstat", "medv")]
+
+head(boston_emery)
+summary(boston_emery)
+
+```
+
+#### Exploratory Analysis
+
+```{r}
+# Distribution of each variable
+par(mfrow = c(2, 2))
+hist(boston_emery$crim)
+hist(boston_emery$nox)
+hist(boston_emery$lstat)
+hist(boston_emery$medv)
+
+# Scatterplots of each predictor vs response
+par(mfrow = c(1, 3))
+plot(boston_emery$crim, boston_emery$medv, xlab = "crim", ylab = "medv")
+plot(boston_emery$nox, boston_emery$medv, xlab = "nox", ylab = "medv")
+plot(boston_emery$lstat, boston_emery$medv, xlab = "lstat", ylab = "medv")
+```
+
+```{r}
+cor(boston_emery[, c("crim", "nox", "lstat")])
+```
+
+The exploratory analysis reveals several important characteristics of the data. The `crim` variable is heavily right-skewed with a handful of extreme outliers, `nox` is roughly bimodal, and `lstat` is moderately right-skewed. The scatterplots confirm that all three predictors have a negative relationship with `medv`, though none are strictly linear. `crim` in particular shows a strong downward relationship after a certain threshold and `lstat` shows the most consistent downward trend. The correlation matrix further reveals moderate positive correlations between all three predictors, with `nox` and `lstat` being the most related at 0.59, which makes intuitive sense as higher pollution areas tend to overlap with lower socioeconomic neighborhoods. Taken together, the nonlinear predictor-response relationships justify the use of GAM as one of the models used, the moderate predictor correlations provide motivation for PCR, and the overall complexity of the data suggests that Random Forest's flexibility in capturing interactions will be valuable.
+
+##### Set Up Training and Testing Data
+
+```{r}
+set.seed(1)
+n <- nrow(boston_emery)
+train_idx <- sample(1:n, size = 0.8 * n)
+
+train <- boston_emery[train_idx, ]
+test  <- boston_emery[-train_idx, ]
+```
+
+#### Generalized Additive Model
+
+```{r}
+library(mgcv)
+
+# Individual GAMs for each predictor
+gam_crim <- gam(medv ~ s(crim), data = train, method = "REML")
+gam_nox <- gam(medv ~ s(nox), data = train, method = "REML")
+gam_lstat <- gam(medv ~ s(lstat), data = train, method = "REML")
+
+# Plot each smooth term individually
+par(mfrow = c(1, 3))
+plot(gam_crim, main = "crim")
+plot(gam_nox, main = "nox")
+plot(gam_lstat, main = "lstat")
+```
+
+The individual thin plate regression spline plots revealed that `crim` and `lstat` both show clean nonlinear relationships with `medv`, justifying the use of splines for each. However, the `nox` spline appeared overly wiggly with wide confidence intervals and a high edf of 7.74, suggesting the model may be overfitting for this predictor.
+
+```{r}
+# Run gam.check on individual nox model
+gam.check(gam_nox)
+
+# Refit nox model with lower k values and compare
+gam_nox_k3 <- gam(medv ~ s(nox, k = 3), data = train, method = "REML")
+gam_nox_k4 <- gam(medv ~ s(nox, k = 4), data = train, method = "REML")
+gam_nox_k5 <- gam(medv ~ s(nox, k = 5), data = train, method = "REML")
+
+# Plot each to compare wiggliness
+par(mfrow = c(1, 3))
+plot(gam_nox_k3, main = "nox k=3")
+plot(gam_nox_k4, main = "nox k=4")
+plot(gam_nox_k5, main = "nox k=5")
+
+# Compare AIC
+AIC(gam_nox, gam_nox_k3, gam_nox_k4, gam_nox_k5)
+```
+
+To investigate, models with lower `k` values of 3, 4, and 5 were tested, all of which produced edf values close to 1 and very similar AIC scores, indicating that the relationship between `nox` and `medv` is closer to linear than nonlinear. Given this evidence, `nox` was fit as a linear term in the full GAM, which is both more interpretable and better supported by the data.
+
+#### Fit final model with `nox` as a linear term and splines for the other two
+
+```{r}
+# Refit full GAM with nox as linear term
+gam_fit <- gam(medv ~ s(crim) + nox + s(lstat),
+               data = train,
+               method = "REML")
+
+summary(gam_fit)
+gam.check(gam_fit)
+```
+
+#### Evaluation
+
+```{r}
+gam_preds <- predict(gam_fit, newdata = test)
+gam_test_rmse <- sqrt(mean((test$medv - gam_preds)^2))
+cat("GAM Test RMSE:", gam_test_rmse)
+```
+
+Both smooth terms were highly significant, with `lstat` showing a strong nonlinear relationship with `medv` at an edf of 6.68, while `crim` behaved nearly linearly at an edf of 1.00. The model explained 70% of the variation in `medv` and achieved a test RMSE of 4.80, meaning predictions of median home price were off by about \$4,800 on average.
+
+#### Random Forests
+
+```{r}
+library(randomForest)
+
+# Initial random forest with default parameters
+set.seed(1)
+rf_fit_initial <- randomForest(medv ~ crim + nox + lstat, 
+                               data = train, 
+                               importance = TRUE)
+rf_fit_initial
+```
+
+```{r}
+set.seed(1)
+mtry_values <- c(1, 2, 3)
+mtry_errors <- rep(NA, length(mtry_values))
+
+for (i in seq_along(mtry_values)) {
+  rf_fit <- randomForest(medv ~ crim + nox + lstat,
+                         data = train,
+                         mtry = mtry_values[i],
+                         ntree = 500)
+  mtry_errors[i] <- mean(rf_fit$mse)
+}
+
+best_mtry <- mtry_values[which.min(mtry_errors)]
+cat("Best mtry:", best_mtry)
+```
+
+Only one predictor will be considered at each split which makes sense considering we are only evaluating based on three predictors.
+
+```{r}
+set.seed(1)
+rf_fit_ntree <- randomForest(medv ~ crim + nox + lstat,
+                             data = train,
+                             mtry = best_mtry,
+                             ntree = 1000)
+
+# Plot error curve to see where it stabilizes
+plot(rf_fit_ntree$mse, type = "l",
+     xlab = "Number of Trees",
+     ylab = "MSE",
+     main = "Random Forest Error vs Number of Trees")
+
+```
+
+The error curve flattened out around 200 trees, so `ntree = 200` was chosen as the point where adding more trees no longer improved performance.
+
+```{r}
+set.seed(1)
+for (ns in c(1, 3, 5)) {
+  rf_fit <- randomForest(medv ~ crim + nox + lstat,
+                         data = train,
+                         mtry = 1,
+                         ntree = 200,
+                         nodesize = ns)
+  preds <- predict(rf_fit, newdata = test)
+  error <- mean((test$medv - preds)^2)
+  cat("Nodesize:", ns, "| Test MSE:", error, "\n")
+}
+```
+
+The test MSE was lowest at `nodesize = 5` (12.05) compared to `nodesize = 3` (12.06) and `nodesize = 1` (12.21), so `nodesize = 5` was selected as the final value. While the differences are small, this choice also prevents the trees from growing unnecessarily deep, reducing the risk of overfitting to the training data.
+
+#### Final Random Forest Model
+
+```{r}
+set.seed(1)
+rf_fit_final <- randomForest(medv ~ crim + nox + lstat,
+                             data = train,
+                             mtry = 1,
+                             ntree = 200,
+                             nodesize = 5,
+                             importance = TRUE)
+
+rf_fit_final
+```
+
+#### Evaluation
+
+```{r}
+# Test RMSE
+rf_preds <- predict(rf_fit_final, newdata = test)
+rf_test_rmse <- sqrt(mean((test$medv - rf_preds)^2))
+cat("Random Forest Test RMSE:", rf_test_rmse)
+
+# Variable Importance
+importance(rf_fit_final)
+varImpPlot(rf_fit_final, main = "Random Forest Variable Importance")
+```
+
+The Random Forest model achieved a test RMSE of 3.46, meaning predictions of median home price are off by about \$3,460 on average. Both the %IncMSE and IncNodePurity metrics agree that `lstat` is by far the most important predictor, with `nox` and `crim` contributing considerably less to the model's predictions. This aligns with our earlier EDA which showed `lstat` had the clearest and most consistent negative relationship with `medv` of the three predictors.
+
+#### PCR Model
+
+```{r}
+library(pls)
+
+set.seed(1)
+pcr_fit <- pcr(medv ~ crim + nox + lstat, 
+               data = train, 
+               scale = TRUE, 
+               validation = "CV")
+summary(pcr_fit)
+```
+
+Based on these results we will use 3 components.
+
+#### Evaluation
+
+```{r}
+pcr_preds <- predict(pcr_fit, newdata = test, ncomp = 3)
+pcr_test_rmse <- sqrt(mean((test$medv - pcr_preds)^2))
+cat("PCR Test RMSE:", pcr_test_rmse)
+```
+
+PCR was fit using 10-fold cross-validation, with all 3 components selected since each one improved prediction accuracy, together explaining 55% of the variation in `medv`. The test RMSE of 5.41 was much higher than Random Forest's 3.46, which makes sense given that PCR assumes linear relationships and our data showed clear nonlinear patterns earlier.
+
+#### Conclusion
+
+```{r}
+# Compare all model RMSEs
+results <- data.frame(
+  Model = c("PCR", "GAM", "Random Forest"),
+  RMSE = c(pcr_test_rmse, gam_test_rmse, rf_test_rmse)
+)
+
+results[order(results$RMSE), ]
+```
+
+Random Forest was the clear winner out of these models, with a test RMSE of 3.46, outperforming GAM at 4.80 and PCR at 5.41. PCR struggled most as it assumes linear relationships which our EDA showed were not appropriate for this data, GAM improved on this by capturing nonlinearity in `crim` and `lstat`, and Random Forest performed best by making no assumptions about the functional form of any relationship and naturally handling the complexity in the data.
