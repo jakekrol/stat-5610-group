@@ -1,0 +1,183 @@
+---
+title: "Final Project"
+author: "STAT 4610/5610 Spring 2026"
+format: pdf
+editor: visual
+date: 2026-03-30
+---
+
+## Final Project: Applying Various Methods to Answer Questions of Interest
+
+#### What individuals need to do
+
+1.  Given your team's data set and your sub-research question, fit at least three statistical learning models. For each model fit, you should also play around with different tuning parameters, likely using CV.
+
+    How is the median house price in \$1000s affected by locational variables such as chas, dis, rad.
+
+```{r}
+library(ISLR2)
+Boston
+```
+
+**BART -**
+
+```{r}
+library(BART)
+set.seed(1056)
+x <- Boston[, c("chas", "dis", "rad")]
+y <- Boston [, "medv"]
+train <- sample(1:nrow(Boston), nrow(Boston)/5)
+xtrain <- x[-train,]
+ytrain <- y[-train]
+
+xtest <- x[train,]
+ytest <- y[train]
+
+bartfit <- gbart(xtrain, ytrain, x.test = xtest)
+
+yhat.bart <- bartfit$yhat.test.mean
+
+sqrt(mean((ytest - yhat.bart)^2))
+```
+
+**Regression Spline -**
+
+```{r}
+library(splines)
+library(caret)
+
+xr <- Boston[, c("chas", "dis", "rad")]
+yr <- Boston$medv
+
+data_spline <- data.frame(xr, medv = yr)
+
+set.seed(1056)
+
+train_control <- trainControl(method = "cv", number = 5)
+
+spline_model <- train(
+  medv ~ bs(dis, df = 4) + bs(rad, df = 4) + chas,
+  data = data_spline,
+  method = "lm",
+  trControl = train_control
+)
+
+summary(spline_model)
+
+spline_preds <- predict(spline_model, newdata = data_spline)
+spline_rmse <- sqrt(mean((y - spline_preds)^2))
+spline_rmse
+```
+
+**Single Layer Neural Network -**
+
+```{r}
+library(nnet)
+
+xn <- Boston[, c("chas", "dis", "rad")]
+yn <- Boston$medv
+data_nn <- data.frame(xn, medv = yn)
+
+set.seed(1056)
+
+train_control <- trainControl(method = "cv", number = 5)
+
+nn_model <- train(
+  medv ~ .,
+  data = data_nn,
+  method = "nnet",
+  trControl = train_control,
+  tuneGrid = expand.grid(
+    size = c(1, 3, 5, 7),     
+    decay = c(0, 0.01, 0.1)   
+  ),
+  linout = TRUE,
+  trace = FALSE,
+  maxit = 500
+)
+
+nn_model
+nn_preds <- predict(nn_model, newdata = data_nn)
+nn_rmse <- sqrt(mean((y - nn_preds)^2))
+nn_rmse
+```
+
+1.  Explain Q1, Q2, and Q3.
+
+My analysis shows that locational variables such as chas, dis, and rad have a meaningful effect on median house price. Properties near the Charles River, closer to employment centers in Boston, or with better highway accessibility tend to differ in value, but the relationships are not strictly linear. This is supported by the fact that the more flexible nonlinear models outperformed the regression spline, suggesting that housing prices respond to these locational factors in more complex ways than a simple linear trend can capture.
+
+Among the three models, the single layer neural network performed best with an RMSE of 6.90, followed by BART with an RMSE of 7.36, while the regression spline performed worst with an RMSE of 8.10. These values are in thousands, so my strongest model the single layer neural network had an average error of \$6,900. The stronger performance of the neural network and BART indicates that nonlinear methods are better suited for modeling the effects of these locational variables on housing prices. Even with only three predictors, the models were able to capture meaningful variation in median home value, demonstrating that location plays an important role in predicting housing prices.
+
+1.  Comment on any ethical implications of this work.
+
+There are also ethical implications in using these models. Housing data often reflects historical inequalities in neighborhood development and investment, meaning that variables related to location can indirectly capture socioeconomic disparities. If these predictions were used in lending, pricing, or policy decisions, they could reinforce existing inequities. In addition, models like neural networks and BART are less interpretable, making it harder to explain why certain neighborhoods receive higher or lower predicted values. Because of this, while these models can improve predictive accuracy, they should be applied carefully to avoid perpetuating bias and to ensure fairness and transparency.
+
+1.  Highly recommended: Create visualizations of your models or just of the best model.
+
+```{r}
+library(ggplot2)
+
+nn_preds <- predict(nn_model, newdata = xtest)
+
+plot_data <- data.frame(
+  Actual = ytest,
+  Predicted = nn_preds
+)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    title = "Single Layer Neural Network: Predicted vs Actual Mean Housing Price",
+    x = "Actual Median House Price",
+    y = "Predicted Median House Price"
+  ) +
+  theme_minimal()
+```
+
+#### What teams need to do
+
+1.  Answer a team research question.
+
+```{r}
+library(MASS)     
+library(factoextra)
+
+xk <- Boston[, c("chas", "dis", "rad", "medv")]
+
+x_scaled <- scale(xk)
+
+pca_fit <- prcomp(x_scaled, center = TRUE, scale. = TRUE)
+
+summary(pca_fit)
+
+pca_scores <- pca_fit$x[, 1:2]   
+
+set.seed(1056)
+
+kfit <- kmeans(pca_scores, centers = 3, nstart = 25)
+
+head(kfit$cluster)
+
+kfit$size
+
+kfit$centers
+```
+
+```{r}
+cluster_labels <- kfit$cluster
+
+cluster_means <- tapply(Boston$medv, cluster_labels, mean)
+predicted_medv <- cluster_means[cluster_labels]
+
+rmse_cluster_pred <- sqrt(mean((Boston$medv - predicted_medv)^2))
+rmse_cluster_pred
+```
+
+1.  Explain Q1, Q2, and Q3.
+2.  Comment on any ethical implications of this work.
+3.  Create at least one visualization that helps tell the overall narrative of the data.
+
+#### Individual contributions
+
+Each individual must comment on their contributions to the team research question. Only individuals who contribute to the team section (and state their contributions) will get points for the team section.
