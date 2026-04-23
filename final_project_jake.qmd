@@ -5,17 +5,25 @@ date: "2026-04-24"
 format: pdf
 ---
 
-## Introduction
+## Introduction (Q1)
 
-My individual research question is whether a house's value as an asset drives the actual median value of house prices in the Boston area. Using strictly "asset" features (e.g., property tax rate), my experiment contrasts my teammates who are predicting median house value using two other categories of predictors: i) socioeconomic/environmental factors and ii) locational factors.
+My individual research question is whether a house's value as an asset drives the actual median value of house prices in the Boston area. Using strictly "asset" features (e.g., property tax rate), my experiment contrasted my teammates who are predicting median house value using two other categories of predictors: i) negative value factors and ii) locational factors.
 
-The data set is sourced from the ISLR2 R package's Boston dataset which, itself, is sourced and modified from the MASS R package.
+An accurate home value regression model based on asset value predictors has direct applications in real estate investing. When investing in real estate, the market value is obviously important, yet real estate is not highly liquidable compared to other assets, such as stocks. Therefore, it is important to account for upkeep costs and factors that could decrease value over time, such as property tax and building age, respectively. It is also important to track well-known real estate factors that maintain asset value, such as number of rooms.
 
-Here, I will regress median house value onto a subset of the available features which we have manually grouped as "asset value" predictors: property tax rate per $10,000, average number of rooms per home, and age. Age is not the median/average age of a housing unit. Instead, age is the proportion of housing units built before 1940.
+An example use case of the final model would be an investor with constraints on property tax payments, building age, etc., who wants to estimate how much money he needs to save to purchase a property. The investor could use this model on real properties to predict prices. Comparing the prediction with real prices, if the prediction is lower, the investor can filter out properties or bargain downward. If the prediction is higher than the offered price, then the investor could investigate further and considering purchasing. 
 
-To answer the question of whether a house's asset value drives its actual value I will evaluate three regression approaches using root mean squared error (RMSE) as the evaluation metric: i) ridge regresssion, ii) principal component regression, and iii) bagging.
+However, a real estate value regression model based on asset value factors is only useful if its predictions are accurate. Here, I use real estate value data from Boston as a case study to evaluate the ability to predict median house value using asset value predictors.
 
-## Data
+## Data and methods (Q2)
+
+The data set was sourced from the ISLR2 R package's Boston dataset which, itself, was sourced and modified from the MASS R package.
+
+Here, I regressed median house value onto a subset of the available features which were grouped into the category of "asset value" predictors: i) property tax rate per $10,000, ii) average number of rooms per home, and iii) age. Age is not the median/average age of a housing unit. Instead, age is the proportion of housing units built before 1940. The response was median value of owner-occupied homes (in units of $1000s).
+
+To answer the question of whether a house's "asset value" drives its actual price I evaluated three regression approaches using root mean squared error (RMSE) as the evaluation metric: i) ridge regresssion, ii) principal component regression (PCR), and iii) bagging. The three methods chosen were have various strengths. Ridge's weight regularization leads to lower magnitude coefficients that are less prone to overfitting training data. PCR is useful when predictors are correlated since the principal components derived from linear combinations of features are constrained to be orthogonal: no correlation across components. Finally, bagging, unlike PCR and ridge, does not assume a linear relationship between predictors and the outcome; instead, many regression trees are fit using bootstraps of the tranining data, and the final prediction is the average of all trees' predictions.
+
+Overall, using various regression methods (ridge, PCR, and bagging) with independent strengths allowed searching for an optimal house price estimator based on asset value predictors.
 
 ```{r}
 library(ISLR2)
@@ -59,9 +67,9 @@ train_data <- df_bos[train_index, ]
 test_data <- df_bos[-train_index, ]
 ```
 
-## Models
+### Models
 
-### Ridge Regression
+#### Ridge Regression
 
 For ridge regression, I will select the optimal lambda using 10-fold cross-validation (default in cv.glmnet)on the training set 
 
@@ -95,7 +103,7 @@ ridge_rmse_scaled
 
 The ridge regression model had an RMSE of `r ridge_rmse_scaled` dollars.
 
-### Principal Component Regression
+#### Principal Component Regression
 
 I will select the optimal number of components using 10-fold cross-validation on the training set.
 
@@ -116,7 +124,7 @@ pcr_rmse_scaled
 
 The principal component regression model had an RMSE of `r pcr_rmse_scaled` dollars.
 
-### Bagging
+#### Bagging
 
 For bagging, I will search for optimal tree number using 10-fold cross-validation.
 
@@ -162,7 +170,6 @@ best_tree
 The best number of trees was `r best_tree`.
 
 ```{r}
-# fit final bagging model with best tree number
 set.seed(0)
 final_bag_model <- randomForest(medv ~ ., data = train_data, mtry = mtry, ntree = best_tree)
 bag_pred <- predict(final_bag_model, newdata = test_data)
@@ -173,7 +180,7 @@ bag_rmse_scaled
 
 The bagging model had an RMSE of `r bag_rmse_scaled` dollars.
 
-## Model comparison
+### Model comparison
 
 ```{r}
 model_names <- c("Ridge Regression", "Principal Component Regression", "Bagging")
@@ -181,6 +188,62 @@ model_rmse <- c(ridge_rmse_scaled, pcr_rmse_scaled, bag_rmse_scaled)
 barplot(model_rmse, names.arg = model_names, ylab = "Test RMSE (dollars)", main = "Model Comparison")
 ```
 
+PCR had both low test RMSE and was a very simple model compared to bagging.
+
+### Apply PCR to all data
+
+```{r}
+final_pcr_model <- pcr(medv ~ ., data = df_bos, scale = TRUE, validation = "CV", segments = 10)
+pcr_pred_all <- predict(final_pcr_model, ncomp = 2, newdata = df_bos)
+residuals <- df_bos$medv - pcr_pred_all
+ggplot(data = df_bos, aes(x = pcr_pred_all, y = residuals)) +
+	geom_point() +
+	geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+	xlab("Predicted Median Value") +
+	ylab("Residuals") +
+	ggtitle("Residuals vs Predicted Values for PCR Model")
+
+```
+
+Most residuals are relatively small and scattered at random vertically at most predicted value ranges. However, when the model has to predict extreme values (both low and high), the residuals are larger. In fact, sometimes the model predicts median values less than 0 which is not reasonable.
 
 
+## Conclusion (Q3)
+
+Among ridge regression, PCR, and bagging, I would recommend using the PCR model for regression real estate value onto asset value predicitors. PCR had both low test RMSE and was a very simple model (2 components) compared to `r best_tree` trees for bagging. Ridge regression had notably higher test RMSE than the other two models. Overall, the PCR test RMSE was relatively low `r pcr_rmse_scaled` dollars which suggests asset value predictors can be used to predict median house value.
+
+Limitations of this experiment are that real estate markets are extremely localized, and the dataset is quite old. Therefore, investors are encouraged to repeat this experiment using recent data from their target locality.
+
+Ethical considerations include the ever-growing disparity in home ownership as assets versus home ownership as a place to live. Using residential properties as assets can limit the supply of housing for people who will actually live in the homes. This shrinkage of supply drives up prices, worsening the affordability and availability crisis of housing in the United States. Therefore, investors should consider the impact of their investments and consider other investing strategies that could have a more positive impact on a community.
+
+
+## Team section
+
+### Which predictor subset category best predicts median house value?
+
+```{r}
+rf_negative <- 3.46
+pcr_asset <- 4.29
+nn_locational <- 6.89
+model_names <- c("Negative (RF)", "Asset value (PCR)", "Locational (NN)")
+model_rmse <- c(rf_negative, pcr_asset, nn_locational)
+ggplot(data = data.frame(model_names, model_rmse), aes(x = reorder(model_names, model_rmse), y = model_rmse)) +
+	geom_bar(stat = "identity", fill = "steelblue") +
+	xlab("Predictor Subset and Model") +
+	ylab("Test RMSE ($1000s of dollars)") +
+	ggtitle("Model Comparison by Predictor Subset") +
+	theme_minimal()
+```
+
+Emery, Ryan, and Jake each individually evaluated regression models for median house value using a different subset of predictors, and among all the models and predictor subsets, the best model was Emery's Random Forest model using negative predictors. Using negative predictors, random forest's test RMSE was 3.46 which was better than the leading models from the other two predictor subsets: Jake's PCR with asset value predictors (RMSE = 4.29) and Ryan's neural network with locational predictors (RMSE = 6.89). 
+
+Overall, our study found that factors which negatively drive real estate value are most important for predicting price. Intuitively, crime, pollution, and socioeconomic neighborhood status are important considerations for real estate buyers. The next important category of predictors were asset value factors, then locational factors.
+
+
+### Team section contributions
+
+Jake
+
+- Helped design research questions
+- Wrote team section "Which predictor subset category best predicts median house value?" and plotted best performance of each predictor subset category
 
