@@ -1,0 +1,768 @@
+---
+title: "Analysis of Housing Prices"
+author: "Emery Berry, Ryan Morreale, Jacob Krol"
+format: pdf
+editor: visual
+---
+
+# Analysis of Housing Prices Based on Certain Categories of Predictive Variables
+
+### Emery - Socioeconomic and Environmental Risk Factors
+
+#### Q1 - Context and Scope of the Problem
+
+The goal of this project is to discover how a specific category of variables will affect median house prices and to use these variables for prediction. The data set used contains 506 observations across 13 predictors capturing various neighborhood characteristics throughout Boston, MA. The response variable of interest is `medv`, the median home value measured in thousands of dollars.
+
+This analysis focuses specifically on **socioeconomic and environmental risk factors**, which are variables that reflect adverse neighborhood conditions rather than physical housing attributes. The three predictors of interest are:
+
+-   `lstat` — the percentage of lower status population in the neighborhood, indicating socioeconomic disadvantage
+
+-   `crim` — the per capita crime rate by town, reflecting public safety conditions
+
+-   `nox` — the concentration of nitrogen oxides in the air (parts per 10 million), serving as a measure of environmental quality and pollution
+
+Each of these variables is expected to have a negative relationship with median home value. It is expected that as crime rises, air quality worsens, or socioeconomic disadvantage increases, home prices tend to fall. However, the nature of these relationships may not be strictly linear. For example, there may be a threshold where home prices drop sharply only after crime or pollution crosses a certain level. Understanding the nature of these relationships, not just their direction, is a key motivation for this analysis. Ultimately, this work aims to answer: **How do socioeconomic and environmental risk factors influence median house prices in Boston, and how well can these variables alone predict home value?**
+
+**Why This Analysis Matters** This analysis is relevant across multiple domains. For policymakers and urban planners, quantifying how crime and pollution suppress home values provides evidence to justify targeted investment in underserved neighborhoods. For real estate professionals, these variables can serve as diagnostic tools for more accurate pricing and risk assessment. More broadly, the variables examined here (crime, pollution, and socioeconomic status) disproportionately affect low-income and historically marginalized communities, meaning their impact on home prices reflects deeper structural inequalities baked into the housing market. Understanding these relationships is a step toward making those inequalities visible and, ideally, actionable.
+
+#### Q2 - Methods and Results
+
+To answer the research question, three statistical learning models were fit to the Boston dataset using `lstat`, `crim`, and `nox` as predictors of median house price. Each model was tuned using cross-validation and compared based on predictive performance. The three models chosen were a Generalized Additive Model (GAM), Random Forest, and Principal Components Regression (PCR). GAM was chosen because it can capture flexible, nonlinear relationships between each predictor and the response. This makes sense in the context of the problem since the effects of crime, pollution, and socioeconomic status on home prices probably aren't strictly linear. Random Forest was included because it handles complex interactions between predictors well without requiring any assumptions about the functional form, and its variable importance output gives us a clearer picture of which risk factors matter most. PCR rounds out the analysis by reducing the three predictors into uncorrelated components, which helps us understand how much of the variation in home prices can be explained by the combined structure of these variables. Together, the three models take quite different approaches to the same problem, which should give us a more complete picture of how these neighborhood characteristics relate to median home value.
+
+#### Setup
+
+```{r}
+library(ISLR2)
+data(Boston)
+
+boston_emery <- Boston[, c("crim", "nox", "lstat", "medv")]
+
+head(boston_emery)
+summary(boston_emery)
+
+```
+
+#### Exploratory Analysis
+
+```{r}
+# Distribution of each variable
+par(mfrow = c(2, 2))
+hist(boston_emery$crim)
+hist(boston_emery$nox)
+hist(boston_emery$lstat)
+hist(boston_emery$medv)
+
+# Scatterplots of each predictor vs response
+par(mfrow = c(1, 3))
+plot(boston_emery$crim, boston_emery$medv, xlab = "crim", ylab = "medv")
+plot(boston_emery$nox, boston_emery$medv, xlab = "nox", ylab = "medv")
+plot(boston_emery$lstat, boston_emery$medv, xlab = "lstat", ylab = "medv")
+```
+
+```{r}
+cor(boston_emery[, c("crim", "nox", "lstat")])
+```
+
+The exploratory analysis reveals several important characteristics of the data. The `crim` variable is heavily right-skewed with a handful of extreme outliers, `nox` is roughly bimodal, and `lstat` is moderately right-skewed. The scatterplots confirm that all three predictors have a negative relationship with `medv`, though none are strictly linear. `crim` in particular shows a strong downward relationship after a certain threshold and `lstat` shows the most consistent downward trend. The correlation matrix further reveals moderate positive correlations between all three predictors, with `nox` and `lstat` being the most related at 0.59, which makes intuitive sense as higher pollution areas tend to overlap with lower socioeconomic neighborhoods. Taken together, the nonlinear predictor-response relationships justify the use of GAM as one of the models used, the moderate predictor correlations provide motivation for PCR, and the overall complexity of the data suggests that Random Forest's flexibility in capturing interactions will be valuable.
+
+#### Set Up Training and Testing Data
+
+```{r}
+set.seed(1)
+n <- nrow(boston_emery)
+train_idx <- sample(1:n, size = 0.8 * n)
+
+train <- boston_emery[train_idx, ]
+test  <- boston_emery[-train_idx, ]
+```
+
+#### Generalized Additive Model
+
+```{r}
+library(mgcv)
+
+# Individual GAMs for each predictor
+gam_crim <- gam(medv ~ s(crim), data = train, method = "REML")
+gam_nox <- gam(medv ~ s(nox), data = train, method = "REML")
+gam_lstat <- gam(medv ~ s(lstat), data = train, method = "REML")
+
+# Plot each smooth term individually
+par(mfrow = c(1, 3))
+plot(gam_crim, main = "crim")
+plot(gam_nox, main = "nox")
+plot(gam_lstat, main = "lstat")
+```
+
+The individual thin plate regression spline plots revealed that `crim` and `lstat` both show clean nonlinear relationships with `medv`, justifying the use of splines for each. However, the `nox` spline appeared overly wiggly with wide confidence intervals and a high edf of 7.74, suggesting the model may be overfitting for this predictor.
+
+```{r}
+# Run gam.check on individual nox model
+gam.check(gam_nox)
+
+# Refit nox model with lower k values and compare
+gam_nox_k3 <- gam(medv ~ s(nox, k = 3), data = train, method = "REML")
+gam_nox_k4 <- gam(medv ~ s(nox, k = 4), data = train, method = "REML")
+gam_nox_k5 <- gam(medv ~ s(nox, k = 5), data = train, method = "REML")
+
+# Plot each to compare wiggliness
+par(mfrow = c(1, 3))
+plot(gam_nox_k3, main = "nox k=3")
+plot(gam_nox_k4, main = "nox k=4")
+plot(gam_nox_k5, main = "nox k=5")
+
+# Compare AIC
+AIC(gam_nox, gam_nox_k3, gam_nox_k4, gam_nox_k5)
+```
+
+To investigate, models with lower `k` values of 3, 4, and 5 were tested, all of which produced edf values close to 1 and very similar AIC scores, indicating that the relationship between `nox` and `medv` is closer to linear than nonlinear. Given this evidence, `nox` was fit as a linear term in the full GAM, which is both more interpretable and better supported by the data.
+
+#### Fit final model with `nox` as a linear term and splines for the other two
+
+```{r}
+# Refit full GAM with nox as linear term
+gam_fit <- gam(medv ~ s(crim) + nox + s(lstat),
+               data = train,
+               method = "REML")
+
+summary(gam_fit)
+gam.check(gam_fit)
+```
+
+#### Evaluation
+
+```{r}
+gam_preds <- predict(gam_fit, newdata = test)
+gam_test_rmse <- sqrt(mean((test$medv - gam_preds)^2))
+cat("GAM Test RMSE:", gam_test_rmse)
+```
+
+Both smooth terms were highly significant, with `lstat` showing a strong nonlinear relationship with `medv` at an edf of 6.68, while `crim` behaved nearly linearly at an edf of 1.00. The model explained 70% of the variation in `medv` and achieved a test RMSE of 4.80, meaning predictions of median home price were off by about \$4,800 on average.
+
+#### Random Forests
+
+```{r}
+library(randomForest)
+
+# Initial random forest with default parameters
+set.seed(1)
+rf_fit_initial <- randomForest(medv ~ crim + nox + lstat, 
+                               data = train, 
+                               importance = TRUE)
+rf_fit_initial
+```
+
+```{r}
+set.seed(1)
+mtry_values <- c(1, 2, 3)
+mtry_errors <- rep(NA, length(mtry_values))
+
+for (i in seq_along(mtry_values)) {
+  rf_fit <- randomForest(medv ~ crim + nox + lstat,
+                         data = train,
+                         mtry = mtry_values[i],
+                         ntree = 500)
+  mtry_errors[i] <- mean(rf_fit$mse)
+}
+
+best_mtry <- mtry_values[which.min(mtry_errors)]
+cat("Best mtry:", best_mtry)
+```
+
+Only one predictor will be considered at each split which makes sense considering we are only evaluating based on three predictors.
+
+```{r}
+set.seed(1)
+rf_fit_ntree <- randomForest(medv ~ crim + nox + lstat,
+                             data = train,
+                             mtry = best_mtry,
+                             ntree = 1000)
+
+# Plot error curve to see where it stabilizes
+plot(rf_fit_ntree$mse, type = "l",
+     xlab = "Number of Trees",
+     ylab = "MSE",
+     main = "Random Forest Error vs Number of Trees")
+
+```
+
+The error curve flattened out around 200 trees, so `ntree = 200` was chosen as the point where adding more trees no longer improved performance.
+
+```{r}
+set.seed(1)
+for (ns in c(1, 3, 5)) {
+  rf_fit <- randomForest(medv ~ crim + nox + lstat,
+                         data = train,
+                         mtry = 1,
+                         ntree = 200,
+                         nodesize = ns)
+  preds <- predict(rf_fit, newdata = test)
+  error <- mean((test$medv - preds)^2)
+  cat("Nodesize:", ns, "| Test MSE:", error, "\n")
+}
+```
+
+The test MSE was lowest at `nodesize = 5` (12.05) compared to `nodesize = 3` (12.06) and `nodesize = 1` (12.21), so `nodesize = 5` was selected as the final value. While the differences are small, this choice also prevents the trees from growing unnecessarily deep, reducing the risk of overfitting to the training data.
+
+#### Final Random Forest Model
+
+```{r}
+set.seed(1)
+rf_fit_final <- randomForest(medv ~ crim + nox + lstat,
+                             data = train,
+                             mtry = 1,
+                             ntree = 200,
+                             nodesize = 5,
+                             importance = TRUE)
+
+rf_fit_final
+```
+
+#### Evaluation
+
+```{r}
+# Test RMSE
+rf_preds <- predict(rf_fit_final, newdata = test)
+rf_test_rmse <- sqrt(mean((test$medv - rf_preds)^2))
+cat("Random Forest Test RMSE:", rf_test_rmse)
+
+# Variable Importance
+importance(rf_fit_final)
+varImpPlot(rf_fit_final, main = "Random Forest Variable Importance")
+```
+
+The Random Forest model achieved a test RMSE of 3.46, meaning predictions of median home price are off by about \$3,460 on average. Both the %IncMSE and IncNodePurity metrics agree that `lstat` is by far the most important predictor, with `nox` and `crim` contributing considerably less to the model's predictions. This aligns with our earlier EDA which showed `lstat` had the clearest and most consistent negative relationship with `medv` of the three predictors.
+
+#### PCR Model
+
+```{r}
+library(pls)
+
+set.seed(1)
+pcr_fit <- pcr(medv ~ crim + nox + lstat, 
+               data = train, 
+               scale = TRUE, 
+               validation = "CV")
+summary(pcr_fit)
+```
+
+Based on these results we will use 3 components.
+
+#### Evaluation
+
+```{r}
+pcr_preds <- predict(pcr_fit, newdata = test, ncomp = 3)
+pcr_test_rmse <- sqrt(mean((test$medv - pcr_preds)^2))
+cat("PCR Test RMSE:", pcr_test_rmse)
+```
+
+PCR was fit using 10-fold cross-validation, with all 3 components selected since each one improved prediction accuracy, together explaining 55% of the variation in `medv`. The test RMSE of 5.41 was much higher than Random Forest's 3.46, which makes sense given that PCR assumes linear relationships and our data showed clear nonlinear patterns earlier.
+
+#### Q3 - Conclusion
+
+```{r}
+# Compare all model RMSEs
+results <- data.frame(
+  Model = c("PCR", "GAM", "Random Forest"),
+  RMSE = c(pcr_test_rmse, gam_test_rmse, rf_test_rmse)
+)
+
+results[order(results$RMSE), ]
+```
+
+Among PCR, GAM, and Random Forest, the Random Forest model is the clear recommendation for predicting median house value using negative predictors. Random Forest achieved the lowest test RMSE of 3.46, outperforming GAM at 4.80 and PCR at 5.41. PCR struggled most as it assumes linear relationships, which our EDA showed were not appropriate for this data. GAM improved on this by capturing nonlinearity in crim and lstat, and Random Forest performed best by making no assumptions about functional form and naturally handling the complexity in the data. Overall, the low test RMSE of \$3,460 suggests that negative predictors alone are strong drivers of median house value.
+
+Ethical considerations for this project include the fact that the variables examined here disproportionately affect low-income and historically marginalized communities. Using these variables in pricing or lending decisions could reinforce existing inequalities rather than address them. Therefore, practitioners should apply these models carefully and consider the broader structural factors that drive the patterns observed in the data.
+
+```{r}
+rm(list = ls())
+```
+
+### Jake - Asset Features
+
+#### Introduction (Q1)
+
+My individual research question is whether a house's value as an asset drives the actual median value of house prices in the Boston area. Using strictly "asset" features (e.g., property tax rate), my experiment contrasted my teammates who are predicting median house value using two other categories of predictors: i) negative value factors and ii) locational factors.
+
+An accurate home value regression model based on asset value predictors has direct applications in real estate investing. When investing in real estate, the market value is obviously important, yet real estate is not highly liquidable compared to other assets, such as stocks. Therefore, it is important to account for upkeep costs and factors that could decrease value over time, such as property tax and building age, respectively. It is also important to track well-known real estate factors that maintain asset value, such as number of rooms.
+
+An example use case of the final model would be an investor with constraints on property tax payments, building age, etc., who wants to estimate how much money he needs to save to purchase a property. The investor could use this model on real properties to predict prices. Comparing the prediction with real prices, if the prediction is lower, the investor can filter out properties or bargain downward. If the prediction is higher than the offered price, then the investor could investigate further and considering purchasing.
+
+However, a real estate value regression model based on asset value factors is only useful if its predictions are accurate. Here, I use real estate value data from Boston as a case study to evaluate the ability to predict median house value using asset value predictors.
+
+#### Data and methods (Q2)
+
+The data set was sourced from the ISLR2 R package's Boston dataset which, itself, was sourced and modified from the MASS R package.
+
+Here, I regressed median house value onto a subset of the available features which were grouped into the category of "asset value" predictors: i) property tax rate per \$10,000, ii) average number of rooms per home, and iii) age. Age is not the median/average age of a housing unit. Instead, age is the proportion of housing units built before 1940. The response was median value of owner-occupied homes (in units of \$1000s).
+
+To answer the question of whether a house's "asset value" drives its actual price I evaluated three regression approaches using root mean squared error (RMSE) as the evaluation metric: i) ridge regresssion, ii) principal component regression (PCR), and iii) bagging. The three methods chosen were have various strengths. Ridge's weight regularization leads to lower magnitude coefficients that are less prone to overfitting training data. PCR is useful when predictors are correlated since the principal components derived from linear combinations of features are constrained to be orthogonal: no correlation across components. Finally, bagging, unlike PCR and ridge, does not assume a linear relationship between predictors and the outcome; instead, many regression trees are fit using bootstraps of the tranining data, and the final prediction is the average of all trees' predictions.
+
+Overall, using various regression methods (ridge, PCR, and bagging) with independent strengths allowed searching for an optimal house price estimator based on asset value predictors.
+
+```{r}
+library(ISLR2)
+library(tidyverse)
+library(glmnet)
+library(pls)
+library(randomForest)
+```
+
+```{r}
+df_bos <- as_tibble(Boston)
+df_bos <- df_bos |> dplyr::select(tax, rm, age, medv)
+head(df_bos)
+```
+
+```{r}
+summary(df_bos)
+```
+
+```{r}
+# check na values
+colSums(is.na(df_bos))
+```
+
+```{r}
+# check for duplicates
+sum(duplicated(df_bos))
+```
+
+```{r}
+pairs(df_bos)
+```
+
+Qualitatively, there are associations between median value and the predictors, especially number of rooms.
+
+For evaluation, I will hold out 20% of the data for testing and use the remaining 80% for cross-validation to find optimal hyperparameters for each model.
+
+```{r}
+set.seed(0)
+train_index <- sample(1:nrow(df_bos), size = 0.8 * nrow(df_bos))
+train_data <- df_bos[train_index, ]
+test_data <- df_bos[-train_index, ]
+```
+
+#### Models
+
+#### Ridge Regression
+
+For ridge regression, I will select the optimal lambda using 10-fold cross-validation (default in cv.glmnet)on the training set
+
+```{r}
+# glmnet requires matrices as input
+# and does not use formula syntax
+x_train <- as.matrix(train_data |> dplyr::select(-medv))
+y_train <- train_data$medv
+x_test <- as.matrix(test_data |> dplyr::select(-medv))
+y_test <- test_data$medv
+```
+
+```{r}
+# lambdas ranging from 10^4 to 10^-4
+lambdas <- 10^seq(4,-4, length = 50)
+# alpha=0 is ridge
+alpha <- 0
+cv_ridge <- cv.glmnet(x_train, y_train, alpha = alpha, lambda = lambdas)
+ridge_best_lambda <- round(cv_ridge$lambda.1se, digits=3)
+plot(cv_ridge)
+```
+
+The best lambda was `r ridge_best_lambda`.
+
+```{r}
+ridge_pred <- predict(cv_ridge, s = ridge_best_lambda, newx = x_test)
+ridge_rmse <- round(sqrt(mean((ridge_pred - y_test)^2)), digits=3)
+ridge_rmse_scaled <- ridge_rmse * 1000
+ridge_rmse_scaled
+```
+
+The ridge regression model had an RMSE of `r ridge_rmse_scaled` dollars.
+
+#### Principal Component Regression
+
+I will select the optimal number of components using 10-fold cross-validation on the training set.
+
+```{r}
+set.seed(0)
+pcr_model <- pcr(medv ~ ., data = train_data, scale = TRUE, validation = "CV", segments = 10)
+validationplot(pcr_model, val.type = "RMSE")
+```
+
+Since 2 and 3 components have similar RMSE, I will choose the smaller model for test set evaluation: 2 components.
+
+```{r}
+pcr_pred <- predict(pcr_model, ncomp = 2, newdata = test_data)
+pcr_rmse <- round(sqrt(mean((pcr_pred - y_test)^2)), digits=3)
+pcr_rmse_scaled <- pcr_rmse * 1000
+pcr_rmse_scaled
+```
+
+The principal component regression model had an RMSE of `r pcr_rmse_scaled` dollars.
+
+#### Bagging
+
+For bagging, I will search for optimal tree number using 10-fold cross-validation.
+
+```{r}
+set.seed(0)
+# for bagging, mtry = number of predictors
+mtry <- ncol(train_data) - 1
+trees <- seq(10,100, by = 5)
+# 10-fold cv
+k <- 10
+
+tree_rmse <- c()
+for (ntree in trees) {
+	all_fold_rmse <- c()
+	for (i in 1:k) {
+		# create folds
+		fold_index <- sample(1:nrow(train_data), size = nrow(train_data) / k)
+		fold_train <- train_data[-fold_index, ]
+		fold_validation <- train_data[fold_index, ]
+		# fit model
+		bag_model <- randomForest(medv ~ ., data = fold_train, mtry = mtry, ntree = ntree)
+		# predict on validation fold
+		bag_pred <- predict(bag_model, newdata = fold_validation)
+		# calculate RMSE for fold
+		fold_rmse <- sqrt(mean((bag_pred - fold_validation$medv)^2))	
+		all_fold_rmse <- c(all_fold_rmse, fold_rmse)
+	}
+	# average RMSE across folds for this tree number
+	tree_rmse <- c(tree_rmse, mean(all_fold_rmse))
+}
+
+```
+
+```{r}
+# plot tree number vs RMSE
+plot(trees, tree_rmse, type = "b", xlab = "Number of Trees", ylab = "CV RMSE")
+best_tree_index <- which.min(tree_rmse)
+best_tree <- trees[best_tree_index]
+best_tree
+```
+
+The best number of trees was `r best_tree`.
+
+```{r}
+set.seed(0)
+final_bag_model <- randomForest(medv ~ ., data = train_data, mtry = mtry, ntree = best_tree)
+bag_pred <- predict(final_bag_model, newdata = test_data)
+bag_rmse <- round(sqrt(mean((bag_pred - y_test)^2)), digits=3)
+bag_rmse_scaled <- bag_rmse * 1000
+bag_rmse_scaled
+```
+
+The bagging model had an RMSE of `r bag_rmse_scaled` dollars.
+
+#### Model comparison
+
+```{r}
+model_names <- c("Ridge Regression", "Principal Component Regression", "Bagging")
+model_rmse <- c(ridge_rmse_scaled, pcr_rmse_scaled, bag_rmse_scaled)
+barplot(model_rmse, names.arg = model_names, ylab = "Test RMSE (dollars)", main = "Model Comparison")
+```
+
+PCR had both low test RMSE and was a very simple model compared to bagging.
+
+#### Apply PCR to all data
+
+```{r}
+final_pcr_model <- pcr(medv ~ ., data = df_bos, scale = TRUE, validation = "CV", segments = 10)
+pcr_pred_all <- predict(final_pcr_model, ncomp = 2, newdata = df_bos)
+residuals <- df_bos$medv - pcr_pred_all
+ggplot(data = df_bos, aes(x = pcr_pred_all, y = residuals)) +
+	geom_point() +
+	geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+	xlab("Predicted Median Value") +
+	ylab("Residuals") +
+	ggtitle("Residuals vs Predicted Values for PCR Model")
+
+```
+
+Most residuals are relatively small and scattered at random vertically at most predicted value ranges. However, when the model has to predict extreme values (both low and high), the residuals are larger. In fact, sometimes the model predicts median values less than 0 which is not reasonable.
+
+#### Conclusion (Q3)
+
+Among ridge regression, PCR, and bagging, I would recommend using the PCR model for regression real estate value onto asset value predicitors. PCR had both low test RMSE and was a very simple model (2 components) compared to `r best_tree` trees for bagging. Ridge regression had notably higher test RMSE than the other two models. Overall, the PCR test RMSE was relatively low `r pcr_rmse_scaled` dollars which suggests asset value predictors can be used to predict median house value.
+
+Limitations of this experiment are that real estate markets are extremely localized, and the dataset is quite old. Therefore, investors are encouraged to repeat this experiment using recent data from their target locality.
+
+Ethical considerations include the ever-growing disparity in home ownership as assets versus home ownership as a place to live. Using residential properties as assets can limit the supply of housing for people who will actually live in the homes. This shrinkage of supply drives up prices, worsening the affordability and availability crisis of housing in the United States. Therefore, investors should consider the impact of their investments and consider other investing strategies that could have a more positive impact on a community.
+
+```{r}
+rm(list = ls())
+```
+
+### Ryan - Locational Variables
+
+How is the median house price in \$1000s affected by locational variables such as chas, dis, rad.
+
+```{r}
+library(ISLR2)
+Boston
+```
+
+#### **BART -**
+
+```{r}
+library(BART)
+set.seed(1056)
+x <- Boston[, c("chas", "dis", "rad")]
+y <- Boston [, "medv"]
+train <- sample(1:nrow(Boston), nrow(Boston)/5)
+xtrain <- x[-train,]
+ytrain <- y[-train]
+
+xtest <- x[train,]
+ytest <- y[train]
+
+bartfit <- gbart(xtrain, ytrain, x.test = xtest, ndpost = 100)
+
+yhat.bart <- bartfit$yhat.test.mean
+
+sqrt(mean((ytest - yhat.bart)^2))
+```
+
+#### **Regression Spline -**
+
+```{r}
+library(splines)
+library(caret)
+
+xr <- Boston[, c("chas", "dis", "rad")]
+yr <- Boston$medv
+
+data_spline <- data.frame(xr, medv = yr)
+
+set.seed(1056)
+
+train_control <- trainControl(method = "cv", number = 5)
+
+spline_model <- train(
+  medv ~ bs(dis, df = 4) + bs(rad, df = 4) + chas,
+  data = data_spline,
+  method = "lm",
+  trControl = train_control
+)
+
+summary(spline_model)
+
+spline_preds <- predict(spline_model, newdata = data_spline)
+spline_rmse <- sqrt(mean((y - spline_preds)^2))
+spline_rmse
+```
+
+#### **Single Layer Neural Network -**
+
+```{r}
+library(nnet)
+
+xn <- Boston[, c("chas", "dis", "rad")]
+yn <- Boston$medv
+data_nn <- data.frame(xn, medv = yn)
+
+set.seed(1056)
+
+train_control <- trainControl(method = "cv", number = 5)
+
+nn_model <- train(
+  medv ~ .,
+  data = data_nn,
+  method = "nnet",
+  trControl = train_control,
+  tuneGrid = expand.grid(
+    size = c(1, 3, 5, 7),     
+    decay = c(0, 0.01, 0.1)   
+  ),
+  linout = TRUE,
+  trace = FALSE,
+  maxit = 500
+)
+
+nn_model
+nn_preds <- predict(nn_model, newdata = data_nn)
+nn_rmse <- sqrt(mean((y - nn_preds)^2))
+nn_rmse
+```
+
+#### Q1, Q2, Q3-
+
+My analysis shows that locational variables such as chas, dis, and rad have a meaningful effect on median house price. Properties near the Charles River, closer to employment centers in Boston, or with better highway accessibility tend to differ in value, but the relationships are not strictly linear. This is supported by the fact that the more flexible nonlinear models outperformed the regression spline, suggesting that housing prices respond to these locational factors in more complex ways than a simple linear trend can capture.
+
+Among the three models, the single layer neural network performed best with an RMSE of 6.90, followed by BART with an RMSE of 7.36, while the regression spline performed worst with an RMSE of 8.10. These values are in thousands, so my strongest model the single layer neural network had an average error of \$6,900. The stronger performance of the neural network and BART indicates that nonlinear methods are better suited for modeling the effects of these locational variables on housing prices. Even with only three predictors, the models were able to capture meaningful variation in median home value, demonstrating that location plays an important role in predicting housing prices.
+
+1.  Comment on any ethical implications of this work.
+
+There are also ethical implications in using these models. Housing data often reflects historical inequalities in neighborhood development and investment, meaning that variables related to location can indirectly capture socioeconomic disparities. If these predictions were used in lending, pricing, or policy decisions, they could reinforce existing inequities. In addition, models like neural networks and BART are less interpretable, making it harder to explain why certain neighborhoods receive higher or lower predicted values. Because of this, while these models can improve predictive accuracy, they should be applied carefully to avoid perpetuating bias and to ensure fairness and transparency.
+
+1.  Highly recommended: Create visualizations of your models or just of the best model.
+
+```{r}
+library(ggplot2)
+
+nn_preds <- predict(nn_model, newdata = xtest)
+
+plot_data <- data.frame(
+  Actual = ytest,
+  Predicted = nn_preds
+)
+
+ggplot(plot_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    title = "Single Layer Neural Network: Predicted vs Actual Mean Housing Price",
+    x = "Actual Median House Price",
+    y = "Predicted Median House Price"
+  ) +
+  theme_minimal()
+```
+
+### Team Analysis:
+
+#### **Q1 - Context and Scope**
+
+The team research question asks which category of predictors — negative value factors, asset value factors, or locational factors — best predicts median home value in Boston. Each teammate independently built models using a different predictor subset, allowing for a direct comparison across categories. The team section then extends this by combining all 9 predictors into a single aggregate model to test whether using everything together outperforms the best individual subset.
+
+#### Which predictor subset category best predicts median house value?
+
+```{r}
+rf_negative <- 3.46
+pcr_asset <- 4.29
+nn_locational <- 6.89
+model_names <- c("Negative (RF)", "Asset value (PCR)", "Locational (NN)")
+model_rmse <- c(rf_negative, pcr_asset, nn_locational)
+ggplot(data = data.frame(model_names, model_rmse), aes(x = reorder(model_names, model_rmse), y = model_rmse)) +
+	geom_bar(stat = "identity", fill = "steelblue") +
+	xlab("Predictor Subset and Model") +
+	ylab("Test RMSE ($1000s of dollars)") +
+	ggtitle("Model Comparison by Predictor Subset") +
+	theme_minimal()
+```
+
+Emery, Ryan, and Jake each individually evaluated regression models for median house value using a different subset of predictors, and among all the models and predictor subsets, the best model was Emery's Random Forest model using negative predictors. Using negative predictors, random forest's test RMSE was 3.46 which was better than the leading models from the other two predictor subsets: Jake's PCR with asset value predictors (RMSE = 4.29) and Ryan's neural network with locational predictors (RMSE = 6.89).
+
+Overall, our study found that factors which negatively drive real estate value are most important for predicting price. Intuitively, crime, pollution, and socioeconomic neighborhood status are important considerations for real estate buyers. The next important category of predictors were asset value factors, then locational factors.
+
+#### **Q2 - Aggregate Model With All 9 Predictors**
+
+Since Random Forest was the best individual performer, we tested whether combining all 9 predictors into a single Random Forest would improve results further.
+
+#### Aggregate Model With all 9 Predictors:
+
+Given the fact that Random Forest was the best performer out of our individual models, we decided to see if a Random Forest Model using all 9 predictors generates an even better result.
+
+```{r}
+boston_team <- Boston[, c("crim", "nox", "lstat", "tax", "rm", "age", "chas", "dis", "rad", "medv")]
+
+# Train/test split
+set.seed(1)
+n <- nrow(boston_team)
+train_idx <- sample(1:n, size = 0.8 * n)
+train_all <- boston_team[train_idx, ]
+test_all  <- boston_team[-train_idx, ]
+
+# --- Tune mtry ---
+set.seed(1)
+mtry_values <- 1:9
+mtry_errors <- rep(NA, length(mtry_values))
+
+for (i in seq_along(mtry_values)) {
+  rf_fit <- randomForest(medv ~ ., data = train_all, mtry = i, ntree = 500)
+  mtry_errors[i] <- mean(rf_fit$mse)
+}
+
+best_mtry <- which.min(mtry_errors)
+cat("Best mtry:", best_mtry, "\n")
+
+# --- Final Model ---
+set.seed(1)
+rf_final <- randomForest(medv ~ ., data = train_all,
+                         mtry = best_mtry,
+                         ntree = 500,
+                         importance = TRUE)
+
+# --- Evaluation ---
+rf_preds <- predict(rf_final, newdata = test_all)
+rf_rmse  <- sqrt(mean((test_all$medv - rf_preds)^2))
+cat("Test RMSE:", round(rf_rmse, 3), "\n")
+
+# --- Variable Importance ---
+varImpPlot(rf_final, main = "Variable Importance - All Predictors")
+
+# --- Predicted vs Actual ---
+ggplot(data.frame(Actual = test_all$medv, Predicted = rf_preds),
+       aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 0.6, color = "steelblue") +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(title = "Random Forest: Predicted vs Actual",
+       x = "Actual Median House Price ($1000s)",
+       y = "Predicted Median House Price ($1000s)") +
+  theme_minimal()
+```
+
+The aggregate model achieved a test RMSE of 3.54, which is slightly worse than Emery's individual model using only the three negative predictors (RMSE = 3.46). This model shows that more predictors did not help. They likely introduced noise that diluted the strong signal already provided by lstat, crim, and nox. The variable importance plot confirms this: rm and lstat dominate both importance metrics, while locational predictors like chas and rad rank near the bottom with very little contribution.
+
+#### K-means Clustering
+
+```{r}
+library(MASS)     
+library(factoextra)
+
+xk <- Boston[, c("chas", "dis", "rad", "medv")]
+
+x_scaled <- scale(xk)
+
+pca_fit <- prcomp(x_scaled, center = TRUE, scale. = TRUE)
+
+summary(pca_fit)
+
+pca_scores <- pca_fit$x[, 1:2]   
+
+set.seed(1056)
+
+kfit <- kmeans(pca_scores, centers = 3, nstart = 25)
+
+head(kfit$cluster)
+
+kfit$size
+
+kfit$centers
+```
+
+```{r}
+cluster_labels <- kfit$cluster
+
+cluster_means <- tapply(Boston$medv, cluster_labels, mean)
+predicted_medv <- cluster_means[cluster_labels]
+
+rmse_cluster_pred <- sqrt(mean((Boston$medv - predicted_medv)^2))
+rmse_cluster_pred
+```
+
+K-means clustering was use for further analysis to see if Boston neighborhoods naturally group by locational characteristics. Using PCA to reduce chas, dis, rad, and medv to two components, three clusters were identified with sizes of 333, 35, and 138 observations. The uneven cluster sizes suggest neighborhoods are not evenly distributed across the locations, with one small but distinct group likely corresponding to properties closer to the river.
+
+The clustering RMSE of 7.80 was the highest of any method tested, which is expected since k-means is unsupervised and not designed for prediction. Its purpose here was purely exploratory, and confirmed that locational variables alone produce weak and uneven groupings, consistent with why they were the worst performing predictor subset in our regression analysis.
+
+#### **Q3 - Conclusion**
+
+Negative predictors were the strongest category for predicting median home value, with Random Forest achieving the best RMSE of 3.46 across all models. Asset value predictors performed second, and locational predictors were the weakest. The aggregate model using all 9 predictors did not improve on the negative-predictor-only model, reinforcing that lstat, crim, and nox already capture the most important variation in home prices and that adding more variables introduced noise rather than signal.
+
+### Team section contributions
+
+Jake
+
+-   Helped design research questions
+-   Wrote team section "Which predictor subset category best predicts median house value?" and plotted best performance of each predictor subset category
+
+Emery
+
+-   Created our aggregate model and analyzed results
+
+-   wrote up the final Q1, Q2, and Q3 sections for the team
+
+Ryan
+
+-   Ran K-means clustering and analysed results
+
+-   Helped design research questions
