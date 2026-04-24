@@ -457,7 +457,7 @@ The bagging model had an RMSE of `r bag_rmse_scaled` dollars.
 #### Model comparison
 
 ```{r}
-model_names <- c("Ridge Regression", "Principal Component Regression", "Bagging")
+model_names <- c("Ridge Regression", "PCR", "Bagging")
 model_rmse <- c(ridge_rmse_scaled, pcr_rmse_scaled, bag_rmse_scaled)
 barplot(model_rmse, names.arg = model_names, ylab = "Test RMSE (dollars)", main = "Model Comparison")
 ```
